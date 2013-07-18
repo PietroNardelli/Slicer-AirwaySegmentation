@@ -1,0 +1,13 @@
+NRRD0004
+# Complete NRRD file format specification at:
+# http://teem.sourceforge.net/nrrd/format.html
+type: int
+dimension: 3
+space: left-posterior-superior
+sizes: 512 512 139
+space directions: (0.76171898841857932,0,0) (0,0.76171898841857932,0) (0,0,2.5)
+kinds: domain domain domain
+endian: little
+encoding: gzip
+space origin: (-195.00000000000003,-171.69999694824224,-347.75000000000011)
+data file: CTChest.raw.gz

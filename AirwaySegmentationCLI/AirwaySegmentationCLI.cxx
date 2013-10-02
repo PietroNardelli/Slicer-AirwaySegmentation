@@ -1,4 +1,4 @@
-/*=========================================================================
+/*========================================================================
 
   Program:   Slicer
   Language:  C++
@@ -13,7 +13,7 @@
 ==========================================================================*/
 
 #include "itkMaskNegatedImageFilter.h"
-#include "itkConnectedThresholdImageFilterModified.h"
+#include "itkConnectedThresholdImageFilter.h"
 #include "itkRegionOfInterestImageFilter.h"
 #include "itkPasteImageFilter.h"
 #include "itkBinaryImageToShapeLabelMapFilter.h"
@@ -59,7 +59,7 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
   		
 	/** TRACHEA SEGMENTATION PIPELINE */
 
-        typedef itk::ConnectedThresholdImageFilterModified< InputImageType, InputImageType > ConnectedFilterType; 
+        typedef itk::ConnectedThresholdImageFilter< InputImageType, InputImageType > ConnectedFilterType; 
 	ConnectedFilterType::Pointer thresholdConnected = ConnectedFilterType::New(); 
 	
 	thresholdConnected->SetInput( VOI );	
@@ -332,7 +332,7 @@ As an alternative, Gao's method (2011) may also be used:
 	/** SEGMENTATION PIPELINE */
 
 
-	typedef itk::ConnectedThresholdImageFilterModified< InputImageType, InputImageType > ConnectedFilterType; 
+	typedef itk::ConnectedThresholdImageFilter< InputImageType, InputImageType > ConnectedFilterType; 
 	ConnectedFilterType::Pointer thresholdConnected = ConnectedFilterType::New();
 
 	thresholdConnected->SetInput( VOI );			  
@@ -909,7 +909,7 @@ int main( int argc, char *argv[] )
 
   	closing->SetInput( pasteImage );
  	closing->SetKernel( structElement );
-  	closing->SetForegroundValue( 2 );
+  	closing->SetForegroundValue( labelValue );
   	closing->Update();
 	
 	typedef itk::VotingBinaryIterativeHoleFillingImageFilter< OutputImageType > IterativeFillHolesFilterType;
@@ -924,7 +924,7 @@ int main( int argc, char *argv[] )
 	HoleFilling->SetInput( closing->GetOutput() );
   	HoleFilling->SetRadius( FillRadius );
 	HoleFilling->SetBackgroundValue( 0 );
-  	HoleFilling->SetForegroundValue( 2 );
+  	HoleFilling->SetForegroundValue( labelValue );
   	HoleFilling->SetMajorityThreshold( 1 );
   	HoleFilling->SetMaximumNumberOfIterations( 15 );
 	HoleFilling->Update();

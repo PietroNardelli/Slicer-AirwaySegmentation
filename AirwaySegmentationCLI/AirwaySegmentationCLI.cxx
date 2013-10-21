@@ -318,10 +318,11 @@ As an alternative, Gao's method (2011) may also be used:
 
 */
 	int n_voxels 			= 0;
-        int n_voxels_prev 		= 0;
+        int n_voxels_prev 		= 1;
         int n_voxels_max 		= trachea_voxels*0.17;
-        double g;
+        double g			= 0;
         double g_max 			= 1.6; // 0.15 according to Gao's idea
+
 	
 	if( n_voxels_max < 15000 )
 	{
@@ -337,7 +338,7 @@ As an alternative, Gao's method (2011) may also be used:
 
 	thresholdConnected->SetInput( VOI );			  
 	thresholdConnected->SetReplaceValue( labelColor ); 
-	InputPixelType UpperThreshold 	= -950;	
+	InputPixelType UpperThreshold 	= -930;	
 	thresholdConnected->SetUpper( UpperThreshold ); 
 	thresholdConnected->AddSeed( index );
 
@@ -367,10 +368,9 @@ As an alternative, Gao's method (2011) may also be used:
 	if( n_voxels == 0 ){
 		
 		bool isMinor = 0;
-		
-		regionSize.Fill(1);
+		regionSize.Fill(3);
   		regionIndex = index;
-		radius.Fill(1);
+		radius.Fill(3);
 
   		region.SetSize(regionSize);
   		region.SetIndex(regionIndex);
@@ -412,26 +412,27 @@ As an alternative, Gao's method (2011) may also be used:
 
 	if( n_voxels > n_voxels_max ){
 		
-		while( n_voxels > n_voxels_max ){
+		while( n_voxels > n_voxels_max )
+		{
 			
-			UpperThreshold = UpperThreshold - 20;
+			UpperThreshold = UpperThreshold - 10;
 			thresholdConnected->SetUpper( UpperThreshold );
-			
+			thresholdConnected->Update();			
 			caster->SetInput( thresholdConnected->GetOutput() );  
 			caster->Update();
 				
 			StatisticsFilter->SetInput(caster->GetOutput());
 			StatisticsFilter->Update();			
 			n_voxels = StatisticsFilter->GetSum();
-				
-			if( n_voxels == 0 ){
+
+			if( n_voxels < 3000 )
+			{
 				bool isMinor = 0;
 		
 				regionIndex = index;
 
-  				regionSize.Fill(1);	
-				radius.Fill(1);
-
+  				regionSize.Fill(3);	
+				radius.Fill(3);
 				region.SetSize(regionSize);
   				region.SetIndex(regionIndex);
 				
@@ -440,7 +441,7 @@ As an alternative, Gao's method (2011) may also be used:
 				
 				unsigned int counter = 0;
 				
-				while( counter < iterator.Size() && !isMinor)
+				while( counter < iterator.Size() && !isMinor )
       				{
 					if( iterator.GetPixel(counter) < UpperThreshold )
 					{
@@ -452,23 +453,31 @@ As an alternative, Gao's method (2011) may also be used:
 
 						caster->SetInput( thresholdConnected->GetOutput() );   	
 						caster->Update();
-				
-						isMinor = 1;		
+						
+						StatisticsFilter->SetInput(caster->GetOutput());
+						StatisticsFilter->Update();
+						n_voxels = StatisticsFilter->GetSum();
+						
+						if( n_voxels > 2000 )
+						{
+							isMinor = 1;
+						}		
  					}
-					counter++;   		
+					counter++;   
     				}
-				StatisticsFilter->SetInput(caster->GetOutput());
-				StatisticsFilter->Update();
-				n_voxels = StatisticsFilter->GetSum();		
 			}
 		}
 
 		// If n_voxels is too small, an increase of the threshold of even 1 HU might cause the violation of g < g_max
 
-		while( n_voxels < 3000 ){ 
+		
+		while( n_voxels < n_voxels_max )
+		{ 
+			
 			UpperThreshold = UpperThreshold + 1;
+
 			thresholdConnected->SetUpper( UpperThreshold );
-
+			thresholdConnected->Update();
 			caster->SetInput( thresholdConnected->GetOutput() );  
 			caster->Update();
 			
@@ -476,29 +485,58 @@ As an alternative, Gao's method (2011) may also be used:
 			StatisticsFilter->Update();	
 			
 			n_voxels = StatisticsFilter->GetSum();
-		}
+					
+			if( n_voxels < 3000 )
+			{
+				bool isMinor = 0;
+		
+				regionIndex = index;
+
+				regionSize.Fill(3);	
+				radius.Fill(3);
+ 
+				region.SetSize(regionSize);
+				region.SetIndex(regionIndex);
+							
+				typedef itk::ConstNeighborhoodIterator< InputImageType > NeighborhoodIterator;
+				NeighborhoodIterator iterator(radius, VOI, region);
+				
+				unsigned int counter = 0;
+				
+				while( counter < iterator.Size() && !isMinor)
+				{
+					if( iterator.GetPixel(counter) < UpperThreshold )
+					{
+						index = iterator.GetIndex( counter );				
+					
+						thresholdConnected->ClearSeeds();
+						thresholdConnected->AddSeed( index );
+						thresholdConnected->Update(); 
+
+						caster->SetInput( thresholdConnected->GetOutput() );   	
+						caster->Update();
 			
-		do{	
-			UpperThreshold = UpperThreshold + 1;
-			n_voxels_prev = n_voxels;				
-			
-			thresholdConnected->SetUpper( UpperThreshold );	
-			
-			caster->SetInput( thresholdConnected->GetOutput() );  
-			caster->Update();
+						StatisticsFilter->SetInput(caster->GetOutput());
+						StatisticsFilter->Update();
+						n_voxels = StatisticsFilter->GetSum();
+						if(n_voxels > 2000)
+						{
+							isMinor = 1;
+						}		
+					}
+					counter++;   	
+				}
+			}
 	
-			StatisticsFilter->SetInput(caster->GetOutput());
-			StatisticsFilter->Update();	
-
-			n_voxels = StatisticsFilter->GetSum();
-			g = double( n_voxels/n_voxels_prev );	// double((n_voxels - n_voxels_prev)/n_voxels_prev) according to Gao et al.
-		}while( g < g_max && n_voxels < n_voxels_max );
-			
+		}
+		
 		UpperThreshold = UpperThreshold - 1;
 		thresholdConnected->SetUpper( UpperThreshold );
+		thresholdConnected->AddSeed( index );
+		thresholdConnected->Update();
 
 		caster->SetInput( thresholdConnected->GetOutput() ); 
-		caster->Update();
+		caster->Update();						
 	}
 
 	// The threshold is iteratively increased until leakage occurs
@@ -533,7 +571,8 @@ As an alternative, Gao's method (2011) may also be used:
 
 			n_voxels = StatisticsFilter->GetSum();
 			g = double( n_voxels/n_voxels_prev );	// double((n_voxels - n_voxels_prev)/n_voxels_prev) according to Gao et al.
-		}while( g < g_max && n_voxels < n_voxels_max );
+		
+			}while( g < g_max && n_voxels < n_voxels_max );
 		
 		UpperThreshold = UpperThreshold - 20;		
 		thresholdConnected->SetUpper( UpperThreshold );
@@ -559,6 +598,7 @@ As an alternative, Gao's method (2011) may also be used:
 			
 			n_voxels = StatisticsFilter->GetSum();
 			g = double( n_voxels/n_voxels_prev );	// double((n_voxels - n_voxels_prev)/n_voxels_prev) according to Gao et al.
+		
 		}while( g < g_max && n_voxels < n_voxels_max );
 		
 		UpperThreshold = UpperThreshold - 1;
@@ -571,7 +611,7 @@ As an alternative, Gao's method (2011) may also be used:
 	StatisticsFilter->SetInput(caster->GetOutput());
 	StatisticsFilter->Update();			
 	n_voxels = StatisticsFilter->GetSum();
-	
+
 	return caster->GetOutput(); 
 }
 

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <executable>
   <category>Segmentation</category>
-  <title>Airway Segmentation</title>
+  <title>Airway Segmentation CLI</title>
   <description><![CDATA[To create a list of fiducials (Seeds) for this algorithm, click on the tool bar icon of an arrow pointing to a starburst fiducial to enter the 'place a new object mode' and then use the fiducials module. This module uses the Slicer Command Line Interface (CLI) and a modified version of the ITK filter ThresholdConnectedImageFilter.]]></description>
   <version>0.1.0.$Revision$(alpha)</version>
   <documentation-url> http://wiki.slicer.org/slicerWiki/index.php/Documentation/Nightly/Modules/AirwaySegmentation</documentation-url>
@@ -47,5 +47,12 @@
       <index>1</index>
       <description><![CDATA[Trachea Label]]></description>
     </image>
+    <string>
+      <name>reconstructionKernelType</name>
+      <label>Kernel Type</label>
+      <channel>input</channel>
+      <index>2</index>
+      <description><![CDATA[Reconstruction kernel type used to reconstruct the input dataset]]></description>
+    </string>
   </parameters>
 </executable>

@@ -8,18 +8,16 @@ set(CLP ${MODULE_NAME})
 
 #-----------------------------------------------------------------------------
 add_executable(${CLP}Test ${CLP}Test.cxx)
-target_link_libraries(${CLP}Test ${CLP}Lib)
+target_link_libraries(${CLP}Test ${CLP}Lib ${SlicerExecutionModel_EXTRA_EXECUTABLE_TARGET_LIBRARIES})
 set_target_properties(${CLP}Test PROPERTIES LABELS ${CLP})
 
 #-----------------------------------------------------------------------------
 set(testname ${CLP}Test)
 ExternalData_add_test(${CLP}Data NAME ${testname} COMMAND ${SEM_LAUNCH_COMMAND} $<TARGET_FILE:${CLP}Test>
-  #--compare DATA{${BASELINE}/${CLP}Test.nhdr,${CLP}Test.raw}
-  #${TEMP}/${CLP}Test.nhdr
+  --compare DATA{${BASELINE}/${CLP}Test.nhdr,${CLP}Test.raw}
+  ${TEMP}/${CLP}Test.nhdr
   ModuleEntryPoint
-  --labelValue 2
-  --seed -7.4,-2.4,-62.6 
-  DATA{${INPUT}/CTChest.nhdr,CTChest.raw} ${TEMP}/${CLP}Test.nhdr
+  --sigma 2.5 DATA{${INPUT}/CTHeadAxial.nhdr,CTHeadAxial.raw.gz} ${TEMP}/${CLP}Test.nhdr
   )
 set_property(TEST ${testname} PROPERTY LABELS ${CLP})
 

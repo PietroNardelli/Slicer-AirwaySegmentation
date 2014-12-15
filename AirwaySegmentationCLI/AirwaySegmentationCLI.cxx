@@ -38,7 +38,8 @@
 
 #include "AirwaySegmentationCLICLP.h"
 
-#define DIM 3	
+#define DIM 3
+
 
 typedef signed short    InputPixelType;
 typedef unsigned short  OutputPixelType;
@@ -46,10 +47,12 @@ typedef unsigned short  OutputPixelType;
 typedef itk::Image<InputPixelType, DIM>  InputImageType;
 typedef itk::Image<OutputPixelType, DIM> OutputImageType;
 
-
 /** FUNCTION FOR TRACHEA SEGMENTATION */
 
-OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, InputImageType::IndexType indexFiducialSlice, std::vector<std::vector<float> > fiducial, int labelColor = 2 )
+OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI,
+                                              InputImageType::IndexType indexFiducialSlice,
+                                              std::vector<std::vector<float> > fiducial,
+                                              int labelColor = 2 )
 {
     OutputImageType::Pointer trachea 		= OutputImageType::New(); 
     OutputImageType::Pointer tracheaPrev 	= OutputImageType::New();
@@ -61,7 +64,6 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
     trachea->Allocate();
   		
     /** TRACHEA SEGMENTATION PIPELINE */
-
     typedef itk::ConnectedThresholdImageFilter< InputImageType, InputImageType > ConnectedFilterType; 
     ConnectedFilterType::Pointer thresholdConnected = ConnectedFilterType::New(); 
 	
@@ -94,53 +96,83 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
     caster->Update();
     trachea = caster->GetOutput();	
 
-    /** COMPUTING THE LABEL SIZES */			 
-	                  
+    /** COMPUTING THE LABEL SIZES */	 	                  
+    OutputImageType::Pointer tracheaAxialCopy = OutputImageType::New(); 
+    OutputImageType::Pointer tracheaCoronalCopy = OutputImageType::New(); 
+
+    typedef itk::ImageDuplicator<OutputImageType> DuplicatorFilterType;
+
+    DuplicatorFilterType::Pointer duplicatorFilter = DuplicatorFilterType::New();
+    duplicatorFilter->SetInputImage(trachea);
+    duplicatorFilter->Update();
+
     // Extracting the axial slice containing the trachea fiducial point
-    OutputImageType::SizeType oneSliceSize;
+    OutputImageType::SizeType  oneAxialSliceSize;
+    InputImageType::IndexType  indexAxialSlice = indexFiducialSlice;
   	
-    oneSliceSize[0] = trachea->GetLargestPossibleRegion().GetSize(0);
-    oneSliceSize[1] = trachea->GetLargestPossibleRegion().GetSize(1);
-    oneSliceSize[2] = 1;
+    oneAxialSliceSize[0] = trachea->GetLargestPossibleRegion().GetSize(0);
+    oneAxialSliceSize[1] = trachea->GetLargestPossibleRegion().GetSize(1);
+    unsigned int diff = trachea->GetLargestPossibleRegion().GetSize(2)-indexAxialSlice[2];
+    if( trachea->GetLargestPossibleRegion().GetSize(2) > 40 &&
+        indexAxialSlice[2] >= 20 &&
+        diff >= 20 )
+    {
+        oneAxialSliceSize[2] = 40;
+        indexAxialSlice[2]  -= 20;
+    }
+    else if( trachea->GetLargestPossibleRegion().GetSize(2) > 40 &&
+             indexAxialSlice[2] >= 20 &&
+             diff < 20 )
+    {
+        oneAxialSliceSize[2] = 40;
+        indexAxialSlice[2]   = trachea->GetLargestPossibleRegion().GetSize(2) - 40;
+    }
+    else if( trachea->GetLargestPossibleRegion().GetSize(2) > 40 && indexAxialSlice[2] < 20 )
+    {
+        oneAxialSliceSize[2] = 40;
+        indexAxialSlice  [2] = 0;
+    }
+    else if( trachea->GetLargestPossibleRegion().GetSize(2) <= 40 )
+    {
+        oneAxialSliceSize[2] = trachea->GetLargestPossibleRegion().GetSize(2);
+        indexAxialSlice  [2] = 0;
+    }
 	
     OutputImageType::RegionType axialSlice;
-
-    axialSlice.SetSize( oneSliceSize );
-    axialSlice.SetIndex( indexFiducialSlice );
  
     typedef itk::RegionOfInterestImageFilter< OutputImageType, OutputImageType > ROIFilterType;
     ROIFilterType::Pointer axialTracheaFilter = ROIFilterType::New();
-  	
-    axialTracheaFilter->SetInput( trachea );
-    axialTracheaFilter->SetRegionOfInterest( axialSlice );
-    axialTracheaFilter->Update();   
 
     typedef itk::BinaryImageToShapeLabelMapFilter< OutputImageType > ShapeLabelType;	
-    ShapeLabelType::Pointer labelSizeFilter = ShapeLabelType::New();
+    ShapeLabelType::Pointer axialLabelSizeFilter = ShapeLabelType::New();
 
-    labelSizeFilter->SetInputForegroundValue( labelColor );
-    labelSizeFilter->SetFullyConnected(1);
-    labelSizeFilter->SetInput( axialTracheaFilter->GetOutput() );
-    labelSizeFilter->Update();
+    axialLabelSizeFilter->SetInputForegroundValue( labelColor );
+    axialLabelSizeFilter->SetFullyConnected(1);
 	
     // Extracting the coronal slice containing the trachea fiducial point
-    ROIFilterType::Pointer coronalTracheaFilter = ROIFilterType::New();
-	
-    oneSliceSize[1] = 1;
-    oneSliceSize[2] = 6;
+    OutputImageType::SizeType oneCoronalSliceSize;
+    oneCoronalSliceSize[0] = trachea->GetLargestPossibleRegion().GetSize(0);
+    oneCoronalSliceSize[1] = 1;
+    oneCoronalSliceSize[2] = 6;
   
     InputImageType::IndexType indexCoronalSlice;
     indexCoronalSlice.Fill(0);
     indexCoronalSlice[1] = index[1];
-    indexCoronalSlice[2] = indexFiducialSlice[2] - 3;
-  
+    if( indexFiducialSlice[2] >= 3 )
+    {
+        indexCoronalSlice[2] = indexFiducialSlice[2] - 3;
+    }
+    else
+    {
+        indexCoronalSlice[2] = indexFiducialSlice[2];
+    }
     OutputImageType::RegionType coronalSlice;
-    coronalSlice.SetIndex( indexCoronalSlice );
-    coronalSlice.SetSize( oneSliceSize );
 
-    coronalTracheaFilter->SetInput( trachea );
-    coronalTracheaFilter->SetRegionOfInterest( coronalSlice );
-    coronalTracheaFilter->Update();
+    ROIFilterType::Pointer coronalTracheaFilter = ROIFilterType::New();
+
+    ShapeLabelType::Pointer coronalLabelSizeFilter = ShapeLabelType::New();
+    coronalLabelSizeFilter->SetInputForegroundValue( labelColor );
+    coronalLabelSizeFilter->SetFullyConnected(1);
   
     // Computing the sizes 
     double xSize      = 0;
@@ -149,60 +181,91 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
     bool   check      = 0;
     bool   decrease   = 0;
        
-    double tracheYSize = trachea->GetLargestPossibleRegion().GetSize(1) * 0.3;
-    double tracheaXSize = trachea->GetLargestPossibleRegion().GetSize(0) * 2 / 3;
+    double tracheaYSize  = trachea->GetLargestPossibleRegion().GetSize(1) * 0.25;
+    double tracheaXSize  = trachea->GetLargestPossibleRegion().GetSize(0) * 2/3;
 
     do{
-        if( labelSizeFilter->GetOutput()->GetNumberOfLabelObjects() > 0 )
+        axialSlice.SetSize( oneAxialSliceSize );
+        axialSlice.SetIndex( indexAxialSlice );
+
+        duplicatorFilter->Update();	
+        tracheaAxialCopy = duplicatorFilter->GetOutput();	
+            
+        axialTracheaFilter->SetInput( tracheaAxialCopy );
+        axialTracheaFilter->SetRegionOfInterest( axialSlice );
+        axialTracheaFilter->Update();
+
+        axialLabelSizeFilter->SetInput( axialTracheaFilter->GetOutput() );
+        axialLabelSizeFilter->Update();
+
+        if( axialLabelSizeFilter->GetOutput()->GetNumberOfLabelObjects() > 0 )
         {
             bool labelOverSize = 0; 
-            unsigned int numberOfObjects = labelSizeFilter->GetOutput()->GetNumberOfLabelObjects();
+            unsigned int numberOfObjects = axialLabelSizeFilter->GetOutput()->GetNumberOfLabelObjects();
 
-            for( unsigned int i = 0; i < numberOfObjects; i++ )
+            for( unsigned int i = 0; i < numberOfObjects; ++i )
             {
-                ySize += labelSizeFilter->GetOutput()->GetNthLabelObject( i )->GetBoundingBox().GetSize(1);
-                if( ySize > tracheYSize)
+                ySize += axialLabelSizeFilter->GetOutput()->GetNthLabelObject( i )->GetBoundingBox().GetSize(1);
+                if( ySize > tracheaYSize)
                 {
                     UpperThreshold = UpperThreshold - 20;
+
                     thresholdConnected->SetUpper( UpperThreshold ); 
-                    caster->SetInput( thresholdConnected->GetOutput() );  
-                    trachea = caster->GetOutput();			
+                    caster->SetInput( thresholdConnected->GetOutput() ); 
                     caster->Update();
-                    axialTracheaFilter->SetInput( trachea );
+                    trachea = caster->GetOutput();
+                    duplicatorFilter->Update();	
+                    tracheaAxialCopy = duplicatorFilter->GetOutput();	
+                    axialTracheaFilter->SetInput( tracheaAxialCopy );
                     axialTracheaFilter->SetRegionOfInterest( axialSlice );
                     axialTracheaFilter->Update();
-                    i = numberOfObjects - 1;    
-                    labelSizeFilter->SetInput( axialTracheaFilter->GetOutput() );
-                    labelSizeFilter->Update();
+                    axialLabelSizeFilter->SetInput( axialTracheaFilter->GetOutput() );
+                    axialLabelSizeFilter->Update();
                     decrease = 1;
                     xSize = 0;
                     ySize = 0;
                     labelOverSize = 1;
+                    i = numberOfObjects - 1;    
                 }
             }
 
-            if( labelOverSize == 0 )
+            if( !labelOverSize )
             {
-                labelSizeFilter->SetInput( coronalTracheaFilter->GetOutput() );
-                labelSizeFilter->Update();
-                unsigned int numberOfObjects = labelSizeFilter->GetOutput()->GetNumberOfLabelObjects();
-	
+                coronalSlice.SetIndex( indexCoronalSlice );
+                coronalSlice.SetSize( oneCoronalSliceSize );
+
+                duplicatorFilter->Update();	
+                tracheaCoronalCopy = duplicatorFilter->GetOutput();	
+
+                coronalTracheaFilter->SetInput( tracheaCoronalCopy );
+                coronalTracheaFilter->SetRegionOfInterest( coronalSlice );
+                coronalTracheaFilter->Update();
+
+                coronalLabelSizeFilter->SetInput( coronalTracheaFilter->GetOutput() );
+                coronalLabelSizeFilter->Update();
+		 
+                unsigned int numberOfObjects = coronalLabelSizeFilter->GetOutput()->GetNumberOfLabelObjects();
+
                 for( unsigned int i = 0; i < numberOfObjects; i++ )
                 {
-                    xSize += labelSizeFilter->GetOutput()->GetNthLabelObject( i )->GetBoundingBox().GetSize(0);
+                    xSize += coronalLabelSizeFilter->GetOutput()->GetNthLabelObject( i )->GetBoundingBox().GetSize(0);
+
                     if( xSize > tracheaXSize )
                     {
                         UpperThreshold = UpperThreshold - 20;
+
                         thresholdConnected->SetUpper( UpperThreshold ); 
                         caster->SetInput( thresholdConnected->GetOutput() );  
-                        trachea = caster->GetOutput();			
                         caster->Update();
-                        coronalTracheaFilter->SetInput( trachea );
+                        trachea = caster->GetOutput();
+                        duplicatorFilter->Update();	
+                        tracheaCoronalCopy = duplicatorFilter->GetOutput();	
+                        coronalTracheaFilter->SetInput( tracheaCoronalCopy );
                         coronalTracheaFilter->SetRegionOfInterest( coronalSlice );
                         coronalTracheaFilter->Update();
                         i = numberOfObjects - 1;	 
-                        labelSizeFilter->SetInput( axialTracheaFilter->GetOutput() );
-                        labelSizeFilter->Update();
+                        coronalLabelSizeFilter->SetInput( axialTracheaFilter->GetOutput() );
+                        coronalLabelSizeFilter->Update();
                         decrease = 1;
                         xSize = 0;
                         ySize = 0;
@@ -223,13 +286,13 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
             InputImageType::IndexType   regionIndex;
             InputImageType::RegionType  region;	  
 
-            regionSize.Fill(5);
+            regionSize.Fill(3);
             regionIndex = index;
-            radius.Fill(5);
+            radius.Fill(3);
 
             region.SetSize(regionSize);
             region.SetIndex(regionIndex);
-	
+
             typedef itk::ConstNeighborhoodIterator< InputImageType > NeighborhoodIterator;
             NeighborhoodIterator iterator(radius, VOI, region);
 	
@@ -240,13 +303,18 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
                 if( iterator.GetPixel(counter) < UpperThreshold )
                 {
                     index = iterator.GetIndex( counter );
-                    indexFiducialSlice[2] = index[2];					
+            
+                    indexCoronalSlice[1] = index[1];
+                    indexCoronalSlice[2] = index[2] - 3;
+
                     thresholdConnected->ClearSeeds();
                     thresholdConnected->AddSeed( index );
-
+                    thresholdConnected->Update();                
+    
                     caster->SetInput( thresholdConnected->GetOutput() );
-                    trachea = caster->GetOutput();	
                     caster->Update();	
+
+                    trachea = caster->GetOutput();	
                     isMinor = 1;
                 }
                 counter++;   
@@ -254,93 +322,145 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
 
             if ( !isMinor && !decrease)
             {
-                UpperThreshold = UpperThreshold + 50;
-                thresholdConnected->SetUpper( UpperThreshold ); 
+                if( UpperThreshold < -800 )
+                {
+                    UpperThreshold = UpperThreshold + 50;
+
+                    thresholdConnected->SetUpper( UpperThreshold ); 
+                    thresholdConnected->Update();                
     
-                caster->SetInput( thresholdConnected->GetOutput() );
-                trachea = caster->GetOutput();	
-                caster->Update();
+                    caster->SetInput( thresholdConnected->GetOutput() );
+                    caster->Update();
+
+                    trachea = caster->GetOutput();
+                }
+                else
+                {
+                    std::cout<<"Please move the seed point in a different position."<<std::endl;
+                    return trachea;
+                }
             }
             else if( !isMinor && decrease )
             {
-                UpperThreshold = UpperThreshold + 1;
-                thresholdConnected->SetUpper( UpperThreshold ); 
-                thresholdConnected->Update();
-                caster->SetInput( thresholdConnected->GetOutput() ); 
-                trachea = caster->GetOutput();	
-                caster->Update();
+                if( UpperThreshold < -800 )
+                {
+                    UpperThreshold = UpperThreshold + 1;
+
+                    thresholdConnected->SetUpper( UpperThreshold ); 
+                    thresholdConnected->Update();
+
+                    caster->SetInput( thresholdConnected->GetOutput() ); 
+                    caster->Update();
+
+                    trachea = caster->GetOutput();	
+                }
+                else
+                {
+                    std::cout<<"Please move the seed point to a different location."<<std::endl;
+                    return trachea;
+                }
             }
 			
-            axialSlice.SetIndex( indexFiducialSlice );
+            axialSlice.SetSize( oneAxialSliceSize );
+            axialSlice.SetIndex( indexAxialSlice );
 
-            axialTracheaFilter->SetInput( trachea );
+            duplicatorFilter->Update();	
+            tracheaAxialCopy = duplicatorFilter->GetOutput();	
+            
+            axialTracheaFilter->SetInput( tracheaAxialCopy );
             axialTracheaFilter->SetRegionOfInterest( axialSlice );
             axialTracheaFilter->Update();
 
-            coronalTracheaFilter->SetInput( trachea );
+            axialLabelSizeFilter->SetInput( axialTracheaFilter->GetOutput() );
+            axialLabelSizeFilter->Update();
+
+            coronalSlice.SetIndex( indexCoronalSlice );
+            coronalSlice.SetSize( oneCoronalSliceSize );
+
+            duplicatorFilter->Update();	
+            tracheaCoronalCopy = duplicatorFilter->GetOutput();	
+
+            coronalTracheaFilter->SetInput( tracheaCoronalCopy );
             coronalTracheaFilter->SetRegionOfInterest( coronalSlice );
             coronalTracheaFilter->Update();
-		 
-            labelSizeFilter->SetInput( axialTracheaFilter->GetOutput() );
-            labelSizeFilter->Update();
+
+            coronalLabelSizeFilter->SetInput( coronalTracheaFilter->GetOutput() );
+            coronalLabelSizeFilter->Update();
 	  		
             xSize = 0;
             ySize = 0;
         }
     }
-    while( !firstCheck );
-
-    tracheaPrev = trachea; 
+    while( !firstCheck && UpperThreshold > -1100 );
     
+    duplicatorFilter->SetInputImage(trachea);
+    duplicatorFilter->Update();
+    tracheaPrev = duplicatorFilter->GetOutput();
+        
     /** INCREASING THE THRESHOLD ITERATIVELY UNTIL LEAKAGE OCCURS */
-
     typedef itk::SubtractImageFilter< OutputImageType,OutputImageType,OutputImageType > SubtractLabelImageType; 
     SubtractLabelImageType::Pointer addedLabel = SubtractLabelImageType::New();
   
     bool overThreshold = 0;
-	
+
+    ShapeLabelType::Pointer labelSizeFilter = ShapeLabelType::New();
+
     do{
         addedLabel->SetInput1( trachea );
         addedLabel->SetInput2( tracheaPrev );
         addedLabel->Update();
+
         labelSizeFilter->SetInput( addedLabel->GetOutput() );
         labelSizeFilter->SetInputForegroundValue( labelColor );
         labelSizeFilter->Update();
-        unsigned int numberOfObjects = labelSizeFilter->GetOutput()->GetNumberOfLabelObjects();
+        unsigned int numberOfObjects = labelSizeFilter->GetOutput()->GetNumberOfLabelObjects(); 
+        double       xSz             = 0;
+        double       ySz             = 0;
+        double       zSz             = 0;
+        
         if( numberOfObjects > 0 )
         {
             for( unsigned int i = 0; i < numberOfObjects; i++ )
             {
-            if( labelSizeFilter->GetOutput()->GetNthLabelObject(i)->GetBoundingBox().GetSize(0) > xSize || 
-                labelSizeFilter->GetOutput()->GetNthLabelObject(i)->GetBoundingBox().GetSize(1) > ySize || 
-                labelSizeFilter->GetOutput()->GetNthLabelObject(i)->GetBoundingBox().GetSize(2) > trachea->GetLargestPossibleRegion().GetSize(2) / 3 )
+                xSz = labelSizeFilter->GetOutput()->GetNthLabelObject(i)->GetBoundingBox().GetSize(0);
+                ySz = labelSizeFilter->GetOutput()->GetNthLabelObject(i)->GetBoundingBox().GetSize(1);
+                zSz = labelSizeFilter->GetOutput()->GetNthLabelObject(i)->GetBoundingBox().GetSize(2);
+                if( xSz > xSize || ySz > ySize || zSz > trachea->GetLargestPossibleRegion().GetSize(2) / 3 )
                 {
+                    if( decrease )
+                    {
+                        UpperThreshold = UpperThreshold - 10;
+                        thresholdConnected->SetUpper( UpperThreshold ); 
+                        thresholdConnected->Update();
+                        caster->SetInput( thresholdConnected->GetOutput() );
+                        caster->Update();
+                        trachea = caster->GetOutput();
+                    }
                     check = 1;
-                    i= labelSizeFilter->GetOutput()->GetNumberOfLabelObjects() - 1;
+                    i = labelSizeFilter->GetOutput()->GetNumberOfLabelObjects() - 1;
                 }
             }
         }
-        if( check == 0 )
+        if( !check )
         {
             if( UpperThreshold < -800 )
             {
-                tracheaPrev = trachea;
-                if( decrease == 0 )
+                duplicatorFilter->SetInputImage(trachea);
+                duplicatorFilter->Update();
+                tracheaPrev = duplicatorFilter->GetOutput();
+                if( !decrease )
                 {
                     UpperThreshold = UpperThreshold + 50;
                 }
                 else
                 {
-                    check = 1;
-                }
-                /*else
-                {
                     UpperThreshold = UpperThreshold + 10;
-                }*/
+                }
                 thresholdConnected->SetUpper( UpperThreshold ); 
-                caster->SetInput( thresholdConnected->GetOutput() );  
-                trachea = caster->GetOutput();			
+                thresholdConnected->Update();
+                caster->SetInput( thresholdConnected->GetOutput() );
                 caster->Update();
+                trachea = caster->GetOutput();	
             }
             else
             {
@@ -349,23 +469,27 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
             }
         }
     }
-    while( check == 0 );
+    while( !check );
   
     // Decreasing the threshold to find a better segmentation
-    if( overThreshold == 0 && decrease == 0 )
+    if( !overThreshold && !decrease )
     {
-        while( check != 0 )
+        while( check && UpperThreshold > -1100 )
         {
             UpperThreshold = UpperThreshold - 10;
+
             thresholdConnected->SetUpper( UpperThreshold ); 
             caster->SetInput( thresholdConnected->GetOutput() );  
             trachea = caster->GetOutput();			
             caster->Update();
+
             addedLabel->SetInput1( trachea );
             addedLabel->SetInput2( tracheaPrev );
             addedLabel->Update();
+
             labelSizeFilter->SetInput( addedLabel->GetOutput() );
             labelSizeFilter->Update();
+
             unsigned int count = 0;
             unsigned int numberOfObjects = labelSizeFilter->GetOutput()->GetNumberOfLabelObjects();
 
@@ -392,36 +516,192 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI, Input
         }
     }
 
-    return trachea;		
+    return trachea;	
 }
 
 
 /** FUNCTION FOR RIGHT AND LEFT AIRWAYS SEGMENTATION */
-
 OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI, 
-                                                InputImageType::IndexType index, 
+                                                InputImageType::IndexType index,
+                                                std::string reconKernel,
                                                 int trachea_voxels, 
                                                 int labelColor = 2 )
 {
-
     /** The method for the segmentation of right and left airways is based on Tschirren (2009):
         Tschirren, J. et al. "Airway segmentation framework for clinical environments." Proc. of Second International Workshop on Pulmonary Image Analysis. 2009.
         As an alternative, Gao's method (2011) may also be used:
         Gao, D. et al. "MGRG-morphological gradient based 3D region growing algorithm for airway tree segmentation in image guided intervention therapy." Bioelectronics and Bioinformatics (ISBB), 2011 International Symposium on. IEEE, 2011.
-    */
+    */ 
 
-    double th           = 0.52;
-    double g_max        = 1.8; // 0.15 according to Gao's idea
+    double th = 0;
 
-    int n_voxels        = 0;
-    int n_voxels_prev   = 1;
-    int n_voxels_max    = trachea_voxels * th; // To take into account the fact that half trachea is used to mask the input image
-    double g            = 0;
+    if( reconKernel == "STANDARD" || reconKernel == "B20f" || reconKernel == "B30f" || reconKernel == "B" 
+        || reconKernel == "C" || reconKernel == "FC10" || reconKernel == "FC12")
+    {
+        if( VOI->GetLargestPossibleRegion().GetSize(2) <= 300 )
+        {
+            if( trachea_voxels > 50000 )
+            {
+                th = 0.5;
+            }
+            else if( trachea_voxels > 20000 && trachea_voxels <= 50000 )//( trachea_voxels > 40000 && trachea_voxels <= 100000 )
+            {
+                th = 0.75;
+            }
+            else if( trachea_voxels <= 20000 )
+            {
+                th = 0.9;
+            }
+        }
+        if( VOI->GetLargestPossibleRegion().GetSize(2) > 300 && VOI->GetLargestPossibleRegion().GetSize(2) <= 400 )
+        {
+            if( trachea_voxels > 100000 ) 
+            {
+                th = 0.5;
+            }
+            else if( trachea_voxels > 85000 && trachea_voxels <= 100000 )
+            {
+                th = 0.75;
+            }
+            else if( trachea_voxels <= 85000 )
+            {
+                th = 0.9;
+            }
+        }
+        if( VOI->GetLargestPossibleRegion().GetSize(2) > 400 )
+        {
+            if( trachea_voxels > 170000 )
+            {
+                th = 0.5;
+            }
+            else if( trachea_voxels > 140000 && trachea_voxels <= 170000 )
+            {
+                th = 0.75;
+            }
+            else if( trachea_voxels <= 140000 )
+            {
+                th = 0.9;
+            }
+        }
+    }
+    else if( reconKernel == "LUNG" || reconKernel == "B50f" || reconKernel == "B60f"
+             || reconKernel == "D" || reconKernel == "FC50" || reconKernel == "FC52" )
+    {
+        if( VOI->GetLargestPossibleRegion().GetSize(2) <= 300 )
+        {
+            if( trachea_voxels > 85000 )
+            {
+                th = 0.2;
+            }
+            else if( trachea_voxels > 75000 && trachea_voxels <= 85000 )
+            {
+                th = 0.3;
+            }
+            else if( trachea_voxels > 35000 && trachea_voxels <= 75000 )
+            {
+                th = 0.35;
+            }
+            else if( trachea_voxels > 10000 && trachea_voxels <= 35000 )//( trachea_voxels > 40000 && trachea_voxels <= 100000 )
+            {
+                th = 0.5;
+            }
+            else if( trachea_voxels <= 10000 )
+            {
+                th = 0.8;
+            }
+        }
+        if( VOI->GetLargestPossibleRegion().GetSize(2) > 300 && VOI->GetLargestPossibleRegion().GetSize(2) <= 400 )
+        {
+            if( trachea_voxels > 120000 )
+            {
+                th = 0.2;
+            }
+            else if( trachea_voxels > 100000 && trachea_voxels <= 120000 ) 
+            {
+                th = 0.35;
+            }
+            else if( trachea_voxels > 85000 && trachea_voxels <= 100000 )
+            {
+                th = 0.5;
+            }
+            else if( trachea_voxels <= 85000 )
+            {
+                th = 0.75;
+            }
+        }
+        if( VOI->GetLargestPossibleRegion().GetSize(2) > 400 )
+        {
+            if( trachea_voxels > 140000 )
+            {
+                th = 0.2;
+            }
+            else if( trachea_voxels > 115000 && trachea_voxels <= 140000 )
+            {
+                th = 0.35;
+            }
+            else if( trachea_voxels > 80000 && trachea_voxels <= 115000 )
+            {
+                th = 0.5;
+            }
+            else if( trachea_voxels <= 80000 )
+            {
+                th = 0.75;
+            }
+        }
+    }
+    else if( reconKernel == "B70f" || reconKernel == "B70s" )
+    {
+        if(VOI->GetLargestPossibleRegion().GetSize(2) < 300 )
+        {
+            if( trachea_voxels > 90000)
+            {
+                th = 0.35;
+            }
+            else if( trachea_voxels > 60000 && trachea_voxels <= 90000 )
+            {
+                th = 0.5;
+            }
+            else if( trachea_voxels > 30000 && trachea_voxels <= 60000 )
+            {
+                th = 0.6;
+            }
+            else if( trachea_voxels <= 30000 )
+            {
+                th = 0.8;
+            }
+        }
+        if(VOI->GetLargestPossibleRegion().GetSize(2) > 300 )
+        {
+            if( trachea_voxels > 120000)
+            {
+                th = 0.25;
+            }
+            else if( trachea_voxels > 80000 && trachea_voxels <= 120000 )
+            {
+                th = 0.4;
+            }
+            else if( trachea_voxels > 50000 && trachea_voxels <= 80000 )
+            {
+                th = 0.6;
+            }
+            else if( trachea_voxels <= 80000 )
+            {
+                th = 0.8;
+            }
+        }
+    }
+
+    double g_max         = 1.6; // 0.15 according to Gao's idea
+    double g             = 0;
+
+    double n_voxels      = 0;
+    double n_voxels_prev = 1;
+    double n_voxels_max  = trachea_voxels * th; // To take into account the fact that half trachea is used to mask the input image
         
-    if( n_voxels_max < 20000 )
+    /*if( n_voxels_max < 20000 )
     {
         n_voxels_max = 20000;
-    }
+    }*/
 
     /** SEGMENTATION PIPELINE */
 
@@ -448,13 +728,13 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
 
     StatisticsFilter->SetInput(caster->GetOutput());
     StatisticsFilter->Update();
-    n_voxels = StatisticsFilter->GetSum();
+    n_voxels = ( StatisticsFilter->GetSum() / labelColor );
 
     // If the starting threshold gives an empty segmentation, neighbours are checked
     InputImageType::SizeType radius,regionSize;
     InputImageType::IndexType regionIndex;
     InputImageType::RegionType region;	                                                        
-			
+    
     if( n_voxels == 0 )
     {
         bool isMinor = 0;
@@ -495,7 +775,7 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
 
         StatisticsFilter->SetInput(caster->GetOutput());
         StatisticsFilter->Update();
-        n_voxels = StatisticsFilter->GetSum();
+        n_voxels = ( StatisticsFilter->GetSum() / labelColor );
     }
 
     // If the number of voxels resulting form the segmentation is too high the threshold is iteratively decreased
@@ -504,6 +784,7 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
         while( n_voxels > n_voxels_max )
         {
             UpperThreshold = UpperThreshold - 10;
+            
             thresholdConnected->SetUpper( UpperThreshold );
             thresholdConnected->Update();			
             caster->SetInput( thresholdConnected->GetOutput() );  
@@ -511,10 +792,10 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
 					
             StatisticsFilter->SetInput(caster->GetOutput());
             StatisticsFilter->Update();			
-            n_voxels = StatisticsFilter->GetSum();
+            n_voxels = ( StatisticsFilter->GetSum() / labelColor );
 
             if( n_voxels < 5000 )
-            {    
+            {
                 bool isMinor = 0;
 		
                 regionIndex = index;
@@ -544,21 +825,25 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
 							
                         StatisticsFilter->SetInput(caster->GetOutput());
                         StatisticsFilter->Update();
-                        n_voxels = StatisticsFilter->GetSum();
+                        n_voxels = ( StatisticsFilter->GetSum() / labelColor );
 							
-                        if( n_voxels > 3000 )
+                        if( n_voxels > 4000 )
                         {
                             isMinor = 1;
                         }		
                     }
-                    counter++;  
+                    counter++;
                 }
             }
         }
 
         // If n_voxels is too small, an increase of the threshold of even 1 HU might cause the violation of g < g_max
-        while( n_voxels < n_voxels_max )
-        { 
+        while( g < g_max && n_voxels < n_voxels_max && UpperThreshold <= -800)
+        {
+            if( n_voxels > 5000 )
+            {
+                n_voxels_prev = n_voxels;
+            }
             UpperThreshold = UpperThreshold + 1;
             thresholdConnected->SetUpper( UpperThreshold );
             thresholdConnected->Update();
@@ -568,8 +853,8 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
             StatisticsFilter->SetInput(caster->GetOutput());
             StatisticsFilter->Update();	
 				
-            n_voxels = StatisticsFilter->GetSum();
-						
+            n_voxels = ( StatisticsFilter->GetSum() / labelColor );
+            					
             if( n_voxels < 5000 )
             {
                 bool isMinor = 0;
@@ -601,14 +886,19 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
 				
                         StatisticsFilter->SetInput(caster->GetOutput());
                         StatisticsFilter->Update();
-                        n_voxels = StatisticsFilter->GetSum();
-                        if(n_voxels > 3000)
+                        n_voxels = ( StatisticsFilter->GetSum() / labelColor );
+
+                        if(n_voxels > 4000)
                         {
                             isMinor = 1;
                         }		
                     }
                     counter++;
                 }
+            }
+            if( n_voxels_prev > 5000 )
+            {
+                g = double( n_voxels/n_voxels_prev );
             }
         }
 
@@ -619,9 +909,9 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
 
         StatisticsFilter->SetInput(caster->GetOutput());
         StatisticsFilter->Update();			
-        n_voxels = StatisticsFilter->GetSum();
+        n_voxels = ( StatisticsFilter->GetSum() / labelColor );
 
-        if( n_voxels < 2000 )
+        if( n_voxels < 4000 )
         {
             UpperThreshold = UpperThreshold + 1;
             thresholdConnected->SetUpper( UpperThreshold );
@@ -629,25 +919,28 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
             caster->Update();
         }
     }
-    // The threshold is iteratively increased until leakage occurs
-    else
+    else      // The threshold is iteratively increased until leakage occurs
     {
-        // If n_voxels is too small, an increase of the threshold of even 1 HU might cause the violation of g < g_max			
-        while( n_voxels < 5000 )
-        { 
-            UpperThreshold = UpperThreshold + 1;
-            thresholdConnected->SetUpper( UpperThreshold );
-    
-            caster->SetInput( thresholdConnected->GetOutput() );  
-            caster->Update();
+        // If n_voxels is too small, an increase of the threshold of even 1 HU might cause the violation of g < g_max
+        if( n_voxels_max > 5000 )
+        {		
+            while( n_voxels < 5000 )
+            { 
+                UpperThreshold = UpperThreshold + 1;
+                thresholdConnected->SetUpper( UpperThreshold );
+        
+                caster->SetInput( thresholdConnected->GetOutput() );  
+                caster->Update();
     			
-            StatisticsFilter->SetInput(caster->GetOutput());
-            StatisticsFilter->Update();	
+                StatisticsFilter->SetInput(caster->GetOutput());
+                StatisticsFilter->Update();	
     			
-            n_voxels = StatisticsFilter->GetSum();
+                n_voxels = ( StatisticsFilter->GetSum() / labelColor );
+            }
         }
         do{	
             UpperThreshold = UpperThreshold + 20;
+
             n_voxels_prev = n_voxels;	
     			
             thresholdConnected->SetUpper( UpperThreshold );
@@ -658,11 +951,11 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
             StatisticsFilter->SetInput(caster->GetOutput());
             StatisticsFilter->Update();
     
-            n_voxels = StatisticsFilter->GetSum();
+            n_voxels = ( StatisticsFilter->GetSum() / labelColor );
             g = double( n_voxels/n_voxels_prev );	// double((n_voxels - n_voxels_prev)/n_voxels_prev) according to Gao et al.
-        }while( g < g_max && n_voxels < n_voxels_max );
+        }while( g < g_max && n_voxels < n_voxels_max && UpperThreshold <= -800 );
 		
-        UpperThreshold = UpperThreshold - 20;		
+        UpperThreshold = UpperThreshold - 20;	
         thresholdConnected->SetUpper( UpperThreshold );
 
         caster->SetInput( thresholdConnected->GetOutput() );  
@@ -670,8 +963,8 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
 	
         StatisticsFilter->SetInput(caster->GetOutput());
         StatisticsFilter->Update();	
-        n_voxels = StatisticsFilter->GetSum();
-    		
+        n_voxels = ( StatisticsFilter->GetSum() / labelColor );
+
         do{	
             UpperThreshold = UpperThreshold + 1;
             n_voxels_prev = n_voxels;	
@@ -684,35 +977,34 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
             StatisticsFilter->SetInput(caster->GetOutput());
             StatisticsFilter->Update();
 			
-            n_voxels = StatisticsFilter->GetSum();
+            n_voxels = ( StatisticsFilter->GetSum() / labelColor );
             g = double( n_voxels/n_voxels_prev );	// double((n_voxels - n_voxels_prev)/n_voxels_prev) according to Gao et al.
-		
-        }while( g < g_max && n_voxels < n_voxels_max );
+        }while( g < g_max && n_voxels < n_voxels_max && UpperThreshold <= -800 );
 			
         UpperThreshold = UpperThreshold - 1;
+
         thresholdConnected->SetUpper( UpperThreshold );	
         caster->SetInput( thresholdConnected->GetOutput() );  
         caster->Update();
     
         StatisticsFilter->SetInput(caster->GetOutput());
         StatisticsFilter->Update();			
-        n_voxels = StatisticsFilter->GetSum();
+        n_voxels = ( StatisticsFilter->GetSum() / labelColor );
     
-        if( n_voxels < 2000 )
+        if( n_voxels_max > 4000 && n_voxels < 4000 )
         {
             UpperThreshold = UpperThreshold + 1;
+
             thresholdConnected->SetUpper( UpperThreshold );
             caster->SetInput( thresholdConnected->GetOutput() );  
             caster->Update();
         }
     }
-    
     return caster->GetOutput(); 
 }
 
 
 /** FUNCTION WHICH PASTES AN IMAGE IN A SPECIFIED INDEX OF THE DESTINATION IMAGE */
-
 template <class ImageType>													                     
 typename ImageType::Pointer Paste( typename ImageType::Pointer sourceImage, typename ImageType::IndexType index, typename ImageType::Pointer destImage)
 {
@@ -730,7 +1022,7 @@ typename ImageType::Pointer Paste( typename ImageType::Pointer sourceImage, type
     }
     catch( itk::ExceptionObject & excep )
     {
-        std::cerr << "Exception caught !" << std::endl;
+        std::cerr << "Exception caught in pasteImage!" << std::endl;
         std::cerr << excep << std::endl;
     } 
 		
@@ -738,15 +1030,16 @@ typename ImageType::Pointer Paste( typename ImageType::Pointer sourceImage, type
 }
 
 
-
 int main( int argc, char *argv[] )
 {
 
     PARSE_ARGS; 	                         
   	
-    typedef  itk::ImageFileReader<InputImageType>  ReaderType;				
+    typedef itk::ImageFileReader<InputImageType>  ReaderType;				
     ReaderType::Pointer reader = ReaderType::New();     
-    reader->SetFileName(  inputVolume.c_str() );                                            
+    
+    reader->SetFileName( inputVolume.c_str() );
+
     try
     {
         reader->Update();
@@ -764,14 +1057,14 @@ int main( int argc, char *argv[] )
 
     if( flipIm )
     {
-	typedef itk::FlipImageFilter<InputImageType> flipImageFilterType;
-	flipImageFilterType::Pointer flipImageFilter = flipImageFilterType::New();
-	bool axes[3] = {true,true,false};
-	flipImageFilter->SetInput(reader->GetOutput());
-	flipImageFilter->SetFlipAxes(axes);
-	flipImageFilter->Update();
-	reader->GraftOutput(flipImageFilter->GetOutput());
-       reader->Update();
+        typedef itk::FlipImageFilter<InputImageType> flipImageFilterType;
+        flipImageFilterType::Pointer flipImageFilter = flipImageFilterType::New();
+        bool axes[3] = {true,true,false};
+        flipImageFilter->SetInput(reader->GetOutput());
+        flipImageFilter->SetFlipAxes(axes);
+        flipImageFilter->Update();
+        reader->GraftOutput(flipImageFilter->GetOutput());
+        reader->Update();
     }
 	
     // The different labels will be pasted into pasteImage
@@ -784,29 +1077,16 @@ int main( int argc, char *argv[] )
     pasteImage->Allocate();
     pasteImage->FillBuffer(0);
 	
-    // Seed points indices
-    InputImageType::IndexType tracheaFiducial, rightFiducial, leftFiducial;
-    InputImageType::PointType tracheaPoint, rightPoint, leftPoint;
+    InputImageType::IndexType tracheaFiducial;
+    InputImageType::PointType tracheaPoint;
 
-    std::vector< std::vector<float> > tracheaSeedPoint, rightSeedsVector, leftSeedsVector;
+    std::vector< std::vector<float> > tracheaSeedPoint;
   
     // Finding the trachea seed point 
     int tracheaIndex = 0;
 
-    if( seed.size() > 0 && seed.size() < 4 )
+    if( seed.size() == 1 )
     { 		
-        if( flipIm && seed.size() == 2 )
-        {
-            std::cerr << "Please specify 1 or 3 seeds for flipped images!" << std::endl;
-            return -1;
-        }			
-   	 for( ::size_t i = 0; i < seed.size(); ++i )
-        {
-            if( seed[i][2] > seed[tracheaIndex][2] )
-            {
-                tracheaIndex = i;
-            }
-        }
         tracheaSeedPoint.push_back( seed[tracheaIndex] );
 
         // Convert to lps the seed point
@@ -826,7 +1106,7 @@ int main( int argc, char *argv[] )
         }
         else
         {
-            std::cerr << "Please place only three seed points!" << std::endl;
+            std::cerr << "Please place only one seed point within the trachea!" << std::endl;
             return -1;
         }
     }   
@@ -834,113 +1114,23 @@ int main( int argc, char *argv[] )
     /** TRACHEA SEGMENTATION */
     InputImageType::SizeType cropSize;	                    
     InputImageType::IndexType tracheaCropStart;              
-  
-    if( seed.size() > 1 )
+
+    cropSize[0] = 70; //TO BE FIXED
+    tracheaCropStart[0] = tracheaFiducial[0] - 35;   //TO BE FIXED
+    if( reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) > 200 )
     {
-        // Main bronchi seed points	
-        int prevRight, prevLeft;
-        prevRight = tracheaIndex;
-        prevLeft  = tracheaIndex; 
-    		
-        int rightPosition, leftPosition; 
-
-        for( ::size_t i = 0; i < seed.size(); ++i )
-        {
-            if( seed[i][0] > seed[tracheaIndex][0] ) // Is the seed on the right side of the trachea point...	
-            {         
-                rightSeedsVector.push_back( seed[i] );
-                if( seed[i][0] < seed[prevRight][0] )
-                {
-                    rightPosition = i;
-                    prevRight = rightPosition;
-                }
-                else if( prevRight != tracheaIndex )
-                {
-                    rightPosition = prevRight;
-                }
-                else
-                {
-                    rightPosition = i;
-                    prevRight = i;
-                }
-            }
-	  
-            if( seed[i][0] < seed[tracheaIndex][0] ) //...or on the left one?
-            {       
-                leftSeedsVector.push_back( seed[i] );
-                if( seed[i][0] > seed[prevLeft][0] )
-                {
-                    leftPosition = i;
-                    prevLeft = i;
-                }
-                else if( prevLeft != tracheaIndex )
-                {
-                    leftPosition = prevLeft;
-                }
-                else
-                {
-                    leftPosition = i;
-                    prevLeft = i;
-                }
-            }
-        }   
-
-        // Converting the right seed point to lps
-        if( !rightSeedsVector.empty() )
-        {
-            rightPoint[0] = seed[rightPosition][0] * (-reader->GetOutput()->GetDirection()[0][0]);	
-            rightPoint[1] = seed[rightPosition][1] * (-reader->GetOutput()->GetDirection()[1][1]);
-            rightPoint[2] = seed[rightPosition][2] * reader->GetOutput()->GetDirection()[2][2];
-            reader->GetOutput()->TransformPhysicalPointToIndex( rightPoint, rightFiducial );
-        }
-
-        // Converting the left seed point to lps
-        if( !leftSeedsVector.empty() )
-        {
-            leftPoint[0] = seed[leftPosition][0] * (-reader->GetOutput()->GetDirection()[0][0]);		
-            leftPoint[1] = seed[leftPosition][1] * (-reader->GetOutput()->GetDirection()[1][1]);
-            leftPoint[2] = seed[leftPosition][2] * reader->GetOutput()->GetDirection()[2][2];
-            reader->GetOutput()->TransformPhysicalPointToIndex( leftPoint, leftFiducial );
-        }
-
-        if( rightSeedsVector.empty() ) // No right seed point
-        {
-            cropSize[0] = ( leftFiducial[0] - tracheaFiducial[0] ) * 2;
-            cropSize[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - leftFiducial[2] - 1;	
-            tracheaCropStart[0] = leftFiducial[0] - cropSize[0]; 	
-        }
-        else if( leftSeedsVector.empty() ) // No left seed point
-        {  
-            cropSize[0] = ( tracheaFiducial[0] - rightFiducial[0] ) * 2;
-            cropSize[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - rightFiducial[2] - 1;
-            tracheaCropStart[0] = rightFiducial[0] + 1; 
-        }
-        else
-        {								 
-            cropSize[0] =  leftFiducial[0] - rightFiducial[0] - 2;
-            if( rightFiducial[2] > leftFiducial[2] )
-            {
-                cropSize[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - rightFiducial[2] - 1;
-            }
-            else
-            {
-                cropSize[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - leftFiducial[2] - 1;
-            }
-            tracheaCropStart[0] = rightFiducial[0] + 1; 
-        }
-            tracheaCropStart[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - cropSize[2] - 1; 
-    }
-    else	// Only one fiducial was set
-    { 
-        cropSize[0] = 60; //TO BE FIXED
-        cropSize[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - 100; //TO BE FIXED
-        tracheaCropStart[0] = tracheaFiducial[0] - 30;   //TO BE FIXED
+        cropSize[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - 100;
         tracheaCropStart[2] = 100;
     }
- 
+    else
+    {
+        cropSize[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - (reader->GetOutput()->GetLargestPossibleRegion().GetSize(2)/4); //TO BE FIXED
+        tracheaCropStart[2] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(2)/4; // TO BE FIXED
+    }
+
     cropSize[1] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(1);        
     tracheaCropStart[1] = 0;		     
-  
+    
     InputImageType::RegionType DesiredRegion;                                                  
     DesiredRegion.SetSize(  cropSize  );                                                                
     DesiredRegion.SetIndex( tracheaCropStart );                                                          
@@ -952,12 +1142,10 @@ int main( int argc, char *argv[] )
     ROIFilter->SetInput( reader->GetOutput() );						          
     ROIFilter->SetRegionOfInterest( DesiredRegion );					 
     ROIFilter->Update();	
-    std::cout<<"ROI size: "<<ROIFilter->GetOutput()->GetLargestPossibleRegion().GetSize()<<std::endl;		
-    
+   
     /** SEGMENTING THE TRACHEA */
-
     OutputImageType::Pointer trachea = OutputImageType::New();
-	
+
     InputImageType::IndexType FiducialSlice;
     FiducialSlice.Fill(0);
     FiducialSlice[2] = cropSize[2] - ( reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - tracheaFiducial[2] ); 
@@ -966,369 +1154,860 @@ int main( int argc, char *argv[] )
     double trSz   = double( cropSize[2] );
     double ratio  = fidPs/trSz;
 
+    if(ratio >= 0.85)
+    {
+        FiducialSlice[2] = cropSize[2]*0.8;
+    }
+
+    trachea = TracheaSegmentation( ROIFilter->GetOutput(), FiducialSlice, tracheaSeedPoint, labelValue );
+
+    typedef itk::BinaryBallStructuringElement< OutputImageType::PixelType, DIM > StructuringElementType;
+  	
+    StructuringElementType structElement;
+    StructuringElementType::SizeType radius;
+    radius.Fill( 1 );
+
+    structElement.SetRadius( radius );
+    structElement.CreateStructuringElement();
+	
+    typedef itk::BinaryMorphologicalClosingImageFilter < OutputImageType, OutputImageType, StructuringElementType > CloseType;
+    CloseType::Pointer closing = CloseType::New();
+
+    closing->SetInput( trachea );
+    closing->SetKernel( structElement );
+    closing->SetForegroundValue( labelValue );
+    closing->Update();
+    trachea = closing->GetOutput();
+
+    /*FINDING THE CARINA IN THE TRACHEA */
+    int          value;
+    int          xDist;
+    int          yDist; 
+
+    unsigned int yFinalMax       = 0;
+    unsigned int yFinalMin       = 0;
+
+    unsigned int xCarinaPosition = 0;
+    unsigned int yCarinaPosition = 0;
+    unsigned int carinaIdx       = 0;
+
+    InputImageType::IndexType carinaIdxPrevSlice;
+    carinaIdxPrevSlice.Fill(0);
+    InputImageType::IndexType tmpIdx;
+    tmpIdx.Fill(0);
+
+    typedef itk::ImageSliceIteratorWithIndex<OutputImageType> SliceIterator;
+    SliceIterator sIt(trachea, trachea->GetLargestPossibleRegion());
+
+    sIt.SetFirstDirection(0);
+    sIt.SetSecondDirection(1);
+
+    sIt.GoToBegin();
+        
+    unsigned int limit = FiducialSlice[2] - 5;
+ 
+    while( sIt.GetIndex()[2] < limit )
+    {
+        unsigned int yMaxPos     = 0;
+        unsigned int yMinPos     = trachea->GetLargestPossibleRegion().GetSize(1); 
+
+        unsigned int yMidPos     = 0; 
+
+        unsigned int yCurrentMax = 0;
+        unsigned int yCurrentMin = 0;
+
+        unsigned int prevPos     = 0;
+        unsigned int prevLine    = 0;
+    
+        unsigned int prevDiff    = 0;
+
+        while( !sIt.IsAtEndOfSlice() )
+        {
+            while( !sIt.IsAtEndOfLine() )
+            {
+                value = sIt.Get();
+                if( value == labelValue )
+                {
+		    double d = sIt.GetIndex()[1] - prevLine;
+                    yDist = abs(d);
+                    if( prevLine != 0 && yDist <= 5 )
+                    {
+                        if( sIt.GetIndex()[1] > yMaxPos )
+                        {
+                            yMaxPos = sIt.GetIndex()[1];
+                        }
+                        if( sIt.GetIndex()[1] < yMinPos )
+                        {
+                            yMinPos = sIt.GetIndex()[1];
+                        }
+                        prevLine = sIt.GetIndex()[1];
+
+                        unsigned int diff = yMaxPos - yMinPos;
+                        if( diff > prevDiff)
+                        {
+                            yCurrentMax = yMaxPos;
+                            yCurrentMin = yMinPos;
+                        }
+                    }
+                    else if( prevLine != 0 && yDist >= 5 )
+                    {
+                        prevDiff = yCurrentMax - yCurrentMin;
+
+                        yMinPos = trachea->GetLargestPossibleRegion().GetSize(1); 
+                        yMaxPos = 0; 
+                        if( sIt.GetIndex()[1] > yMaxPos )
+                        {
+                            yMaxPos = sIt.GetIndex()[1];
+                        }
+                        if( sIt.GetIndex()[1] < yMinPos )
+                        {
+                            yMinPos = sIt.GetIndex()[1];
+                        }
+                    }
+                    prevLine = sIt.GetIndex()[1];
+                }
+                ++sIt;
+            }
+            sIt.NextLine();
+        }
+
+        if( yCurrentMax > yCurrentMin )
+        {
+            yMidPos = yCurrentMin + (yCurrentMax - yCurrentMin) / 2;
+        }
+
+        sIt.GoToBeginOfSlice();
+        while( !sIt.IsAtEndOfSlice() )
+        {
+            while( !sIt.IsAtEndOfLine() )
+            {
+                value = sIt.Get();
+                if( value == labelValue )
+                {
+                    xDist = sIt.GetIndex()[0] - prevPos;
+                    if( prevPos != 0 && sIt.GetIndex()[1] == yMidPos 
+                        && xDist >= 10 && xDist < 20
+                        && sIt.GetIndex()[0] > int(cropSize[0]/3) )
+                    {
+                        carinaIdx       = sIt.GetIndex()[2];
+                        xCarinaPosition = prevPos + (xDist/2);
+                        yCarinaPosition = yMidPos;
+                        yFinalMax       = yCurrentMax;
+                        yFinalMin       = yCurrentMin;
+                    }
+                    prevPos = sIt.GetIndex()[0];
+                }
+                ++sIt;
+            }
+            sIt.NextLine();
+        }
+           
+        carinaIdxPrevSlice[0] = xCarinaPosition; 
+        carinaIdxPrevSlice[1] = yCarinaPosition;
+        carinaIdxPrevSlice[2] = carinaIdx;
+
+        sIt.NextSlice();
+    }
+
+    cropSize[2] -= carinaIdx;
+    tracheaCropStart[2] += carinaIdx;
+    FiducialSlice[2] = cropSize[2] - ( reader->GetOutput()->GetLargestPossibleRegion().GetSize(2) - tracheaFiducial[2] ); 
+
+    fidPs  = double( FiducialSlice[2] );
+    trSz   = double( cropSize[2] );
+    ratio  = fidPs/trSz;
 
     if(ratio >= 0.85)
     {
         FiducialSlice[2] = cropSize[2]*0.8;
     }
 
-    trachea = TracheaSegmentation( ROIFilter->GetOutput(), FiducialSlice, tracheaSeedPoint, labelValue );	
-
-    OutputImageType::IndexType regionIndex;
-    regionIndex = tracheaCropStart;
-	
-    /** RIGHT AND LEFT AIRWAYS SEGMENTATION */
-    if( seed.size() > 1 )
-    {	
-        typedef itk::StatisticsImageFilter< OutputImageType > StatisticsImageFilterType;		
-        StatisticsImageFilterType::Pointer StatisticsFilter = StatisticsImageFilterType::New();	
-
-        StatisticsFilter->SetInput(trachea);
-        StatisticsFilter->Update();
-
-        // Use half trachea to mask the input image
-        typedef itk::BinaryImageToShapeLabelMapFilter< OutputImageType > ShapeLabelType;
-		
-        typedef ShapeLabelType::OutputImageType LabelMapType;
-        LabelMapType::Pointer labelMap = LabelMapType::New();
-		
-        typedef itk::MaskNegatedImageFilter< InputImageType, OutputImageType, InputImageType > MaskNegatedImageType;
-        MaskNegatedImageType::Pointer maskNegFilter = MaskNegatedImageType::New();
-
-        OutputImageType::Pointer closeImage = OutputImageType::New(); 
-
-        closeImage->SetRegions(trachea->GetRequestedRegion() );                                   
-        closeImage->SetBufferedRegion( trachea->GetBufferedRegion() );
-        closeImage->SetLargestPossibleRegion( trachea->GetLargestPossibleRegion() );
-        closeImage->CopyInformation( trachea );
-        closeImage->Allocate();
-        closeImage->FillBuffer(labelValue);
-
-        OutputImageType::SizeType sz = trachea->GetLargestPossibleRegion().GetSize();
-        sz[0] = 4*sz[0]/5 + 5;
-        sz[2] = 12;
-        OutputImageType::IndexType stIdx; 
-        stIdx.Fill(0);   
-                       
-        OutputImageType::RegionType rg;                                                  
-        rg.SetSize(  sz  );
-        rg.SetIndex( stIdx );
-        typedef itk::RegionOfInterestImageFilter< OutputImageType, OutputImageType > outputROIFilterType;
-        outputROIFilterType::Pointer cropFilter = outputROIFilterType::New();	                 
-
-        cropFilter->SetInput( closeImage );	      
-        cropFilter->SetRegionOfInterest( rg );					 
-        cropFilter->Update();	
-
-        typedef itk::ImageDuplicator<OutputImageType> DuplicatorFilterType;
-
-        /** RIGHT AIRWAY SEGMENTATION */
-        if( !rightSeedsVector.empty() )
+    bool exit = 0;
+    sIt.GoToBegin();
+        
+    while( !exit && !sIt.IsAtEnd() )
+    {
+        while( !exit && !sIt.IsAtEndOfSlice() )
         {
-            OutputImageType::Pointer halfTrachea = OutputImageType::New();
-            
-            DuplicatorFilterType::Pointer duplicatorFilter = DuplicatorFilterType::New();
-            duplicatorFilter->SetInputImage(trachea);
-            duplicatorFilter->Update();
-            halfTrachea = duplicatorFilter->GetOutput();
-
-            typedef itk::ImageSliceIteratorWithIndex<OutputImageType> SliceIterator;
-            SliceIterator sIt(halfTrachea, halfTrachea->GetRequestedRegion());
-
-            sIt.SetFirstDirection(0);
-            sIt.SetSecondDirection(1);
-
-            sIt.GoToBegin();
-
-            int value;
-            unsigned int maxPos = 0;    
-            unsigned int minPos = halfTrachea->GetLargestPossibleRegion().GetSize(0);
-
-            unsigned int midPos = 0;   
-
-            while( !sIt.IsAtEnd() )
+            while( !exit && !sIt.IsAtEndOfLine() )
             {
-                while( !sIt.IsAtEndOfSlice() )
+                value = sIt.Get();
+                if( value == labelValue && sIt.GetIndex()[2] >= (carinaIdx + 10 ) && sIt.GetIndex()[2] <= (cropSize[2] - 5) )
                 {
-                    while( !sIt.IsAtEndOfLine() )
+                    if( sIt.GetIndex()[0] == 0 || sIt.GetIndex()[0] == cropSize[0] )
                     {
-                        value = sIt.Get();
-                        if( value == labelValue )
-                        {
-                            if( sIt.GetIndex()[0] > maxPos )
-                            {
-                                maxPos = sIt.GetIndex()[0];
-                            }
-                            else if( sIt.GetIndex()[0] < minPos )
-                            {
-                                minPos = sIt.GetIndex()[0];
-                            }
-                        }
-                        ++sIt;
+                        cropSize[0] += 10; 
+                        tracheaCropStart[0] -= 5;
+                        xCarinaPosition += 5;
+                        exit = 1;
                     }
-                    sIt.NextLine();
                 }
-                if( maxPos > minPos )
-                {
-                    midPos = minPos + (maxPos - minPos) / 2;
-                }
-
-                sIt.GoToBeginOfSlice();
-
-                while( !sIt.IsAtEndOfSlice() )
-                {
-                    while( !sIt.IsAtEndOfLine() )
-                    {
-                        value = sIt.Get();
-                        if( value == labelValue )
-                        {
-                            if( !flipIm && sIt.GetIndex()[0] <= midPos )
-                            {
-                                sIt.Set(0);
-                            }
-                            else if( flipIm && sIt.GetIndex()[0] >= midPos )
-                            {
-                                sIt.Set(0);            
-                            }
-                        }
-                        ++sIt;
-                    }
-                    sIt.NextLine();
-                }
-
-                maxPos = 0;
-                minPos = trachea->GetLargestPossibleRegion().GetSize(0);
-                midPos = 0;
-                sIt.NextSlice();
+                ++sIt;
             }
-
-            OutputImageType::IndexType idx;
-            idx = regionIndex;
-
-            pasteImage->FillBuffer(0);
-            pasteImage = Paste<OutputImageType>( halfTrachea, idx, pasteImage );
-
-            if( !flipIm && !leftSeedsVector.empty() )
-            {
-                stIdx[0] = leftFiducial[0] - trachea->GetLargestPossibleRegion().GetSize(0)/2.5;
-                stIdx[2] = leftFiducial[2] - 5;
-            }
-            else if( !flipIm )
-            {
-                stIdx[0] = tracheaFiducial[0] + trachea->GetLargestPossibleRegion().GetSize(0)/2;
-                stIdx[2] = tracheaCropStart[2] - 5;
-            }
-            else
-            {
-                stIdx[0] = rightFiducial[0] - trachea->GetLargestPossibleRegion().GetSize(0)/4;  
-                stIdx[2] = rightFiducial[2] - 5;
-            }
-            pasteImage = Paste<OutputImageType>( cropFilter->GetOutput(), stIdx, pasteImage );
-
-            // The trachea label is used to mask the input image
-            maskNegFilter->SetInput( reader->GetOutput() );
-            maskNegFilter->SetMaskImage( pasteImage );
-            maskNegFilter->Update();	
-
-            StatisticsImageFilterType::Pointer maskStatisticsFilter = StatisticsImageFilterType::New();	
-            maskStatisticsFilter->SetInput(halfTrachea);
-            maskStatisticsFilter->Update();
-
-            OutputImageType::Pointer rightLung = OutputImageType::New();
-			
-            if( flipIm && !leftSeedsVector.empty() )
-            {
-                rightLung = RightLeftSegmentation( maskNegFilter->GetOutput(), leftFiducial, StatisticsFilter->GetSum(), labelValue ); 
-            }
-            else if( !flipIm )
-            {
-                rightLung = RightLeftSegmentation( maskNegFilter->GetOutput(), rightFiducial, StatisticsFilter->GetSum(), labelValue ); 
-            }
-					
-            ShapeLabelType::Pointer rightLabelConverter = ShapeLabelType::New();
-
-            rightLabelConverter->SetInput( rightLung );
-            rightLabelConverter->SetInputForegroundValue( labelValue );
-            rightLabelConverter->Update();
-		
-            labelMap = rightLabelConverter->GetOutput();
+            sIt.NextLine();
         }
+        sIt.NextSlice();
+    }
 
-        /**LEFT AIRWAY SEGMENTATION */ 
-        if( !leftSeedsVector.empty() )
-        {
-            OutputImageType::Pointer halfTrachea = OutputImageType::New();
-
-            DuplicatorFilterType::Pointer duplicatorFilter = DuplicatorFilterType::New();
-            duplicatorFilter->SetInputImage(trachea);
-            duplicatorFilter->Update();
-            halfTrachea = duplicatorFilter->GetOutput();
-
-            typedef itk::ImageSliceIteratorWithIndex<OutputImageType> SliceIterator;
-            SliceIterator sIt(halfTrachea, halfTrachea->GetRequestedRegion());
-
-            sIt.SetFirstDirection(0);
-            sIt.SetSecondDirection(1);
-
-            sIt.GoToBegin();
-
-            int value;
-            unsigned int maxPos = 0;    
-            unsigned int minPos = halfTrachea->GetLargestPossibleRegion().GetSize(0);
-
-            unsigned int midPos = 0;   
-
-            while( !sIt.IsAtEnd() )
-            {
-                while( !sIt.IsAtEndOfSlice() )
-                {
-                    while( !sIt.IsAtEndOfLine() )
-                    {
-                        value = sIt.Get();
-                        if( value == labelValue )
-                        {
-                            if( sIt.GetIndex()[0] > maxPos )
-                            {
-                                maxPos = sIt.GetIndex()[0];
-                            }
-                            else if( sIt.GetIndex()[0] < minPos )
-                            {
-                                minPos = sIt.GetIndex()[0];
-                            }
-                        }
-                        ++sIt;
-                    }
-                    sIt.NextLine();
-                }
-                if( maxPos > minPos )
-                {
-                    midPos = minPos + (maxPos - minPos) / 2;
-                }
-
-                sIt.GoToBeginOfSlice();
-
-                while( !sIt.IsAtEndOfSlice() )
-                {
-                    while( !sIt.IsAtEndOfLine() )
-                    {
-                        value = sIt.Get();
-                        if( value == labelValue )
-                        {
-                            if( !flipIm && sIt.GetIndex()[0] >= midPos )
-                            {
-                                sIt.Set(0);
-                            }
-                            else if( flipIm && sIt.GetIndex()[0] <= midPos )
-                            {
-                                sIt.Set(0);            
-                            }
-                        }
-                        ++sIt;
-                    }
-                    sIt.NextLine();
-                }
-
-                maxPos = 0;
-                minPos = trachea->GetLargestPossibleRegion().GetSize(0);
-                midPos = 0;
-                sIt.NextSlice();
-            }
-
-            OutputImageType::IndexType idx;
-            idx = regionIndex;
-
-            pasteImage->FillBuffer(0);
-            pasteImage = Paste<OutputImageType>( halfTrachea, idx, pasteImage );
-
-            if( !flipIm && !rightSeedsVector.empty() )
-            {
-                stIdx[0] = rightFiducial[0] - trachea->GetLargestPossibleRegion().GetSize(0)/2.5;
-                stIdx[2] = rightFiducial[2] - 5;
-            }
-            else if(!flipIm)
-            {
-                stIdx[0] = tracheaCropStart[0] + trachea->GetLargestPossibleRegion().GetSize(0)/2;
-                stIdx[2] = tracheaCropStart[2] - 5;
-            }
-            else
-            {
-                stIdx[0] = leftFiducial[0] - trachea->GetLargestPossibleRegion().GetSize(0)/4;  
-                stIdx[2] = leftFiducial[2] - 5;
-            }			
-            pasteImage = Paste<OutputImageType>( cropFilter->GetOutput(), stIdx, pasteImage );
-
-            maskNegFilter->SetInput( reader->GetOutput() );
-            maskNegFilter->SetMaskImage( pasteImage );
-            maskNegFilter->Update();
-
-            StatisticsImageFilterType::Pointer maskStatisticsFilter = StatisticsImageFilterType::New();	
-            maskStatisticsFilter->SetInput(halfTrachea);
-            maskStatisticsFilter->Update();
-
-            OutputImageType::Pointer leftLung = OutputImageType::New();
-			
-            if( flipIm && !rightSeedsVector.empty())
-            {
-                leftLung = RightLeftSegmentation( maskNegFilter->GetOutput(), rightFiducial, StatisticsFilter->GetSum(), labelValue ); //no..check that rightFiducial exists!!
-            }
-            else if( !flipIm )
-            {
-                leftLung = RightLeftSegmentation( maskNegFilter->GetOutput(), leftFiducial, StatisticsFilter->GetSum(), labelValue );
-            }
-				
-            ShapeLabelType::Pointer leftLabelConverter = ShapeLabelType::New();
-
-            leftLabelConverter->SetInput( leftLung );
-            leftLabelConverter->SetInputForegroundValue( labelValue );
-            leftLabelConverter->Update();  
-		
-            if( !rightSeedsVector.empty() )
-            {
-                typedef itk::MergeLabelMapFilter< LabelMapType > MergeFilterType;	  
-                MergeFilterType::Pointer mergeFilter = MergeFilterType::New(); 	  
-                mergeFilter->SetMethod( MergeFilterType::PACK );
-                mergeFilter->SetInput( labelMap );
-                mergeFilter->SetInput( 1, leftLabelConverter->GetOutput() );
-                mergeFilter->Update();
-                labelMap = mergeFilter->GetOutput();
-            }
-            else if( !flipIm )
-            {
-                labelMap = leftLabelConverter->GetOutput();
-            }
-        }
-
-        pasteImage->FillBuffer(0);
-        pasteImage = Paste<OutputImageType>( trachea, regionIndex, pasteImage ); 
-
-        ShapeLabelType::Pointer labelConverter = ShapeLabelType::New();
-
-        labelConverter->SetInput( pasteImage );
-        labelConverter->SetInputForegroundValue( labelValue ); 
-        labelConverter->Update();
-	  
-        for( unsigned int i = 0; i < labelConverter->GetOutput()->GetNumberOfLabelObjects(); i++ )
-        {
-            labelMap->PushLabelObject( labelConverter->GetOutput()->GetNthLabelObject(i) );
-        }
-  
-        labelMap->Update();
-  
-        typedef itk::LabelMapToBinaryImageFilter< LabelMapType, OutputImageType > LabelMapToBinaryImageType; 
-        LabelMapToBinaryImageType::Pointer labelToBinaryFilter = LabelMapToBinaryImageType::New();
-
-        labelToBinaryFilter->SetInput( labelMap );
-        labelToBinaryFilter->SetBackgroundValue( 0 );
-        labelToBinaryFilter->SetForegroundValue( labelValue );
-        labelToBinaryFilter->Update();
+    DesiredRegion.SetSize(  cropSize  );                                                                
+    DesiredRegion.SetIndex( tracheaCropStart );                                                          
  
-        pasteImage = labelToBinaryFilter->GetOutput();
+    ROIFilter->SetInput( reader->GetOutput() );						          
+    ROIFilter->SetRegionOfInterest( DesiredRegion );					 
+    ROIFilter->Update();	
+
+    trachea = TracheaSegmentation( ROIFilter->GetOutput(), FiducialSlice, tracheaSeedPoint, labelValue );
+
+    OutputImageType::IndexType regionIndex = tracheaCropStart;
+   
+    typedef itk::RegionOfInterestImageFilter< OutputImageType, OutputImageType > outputROIFilterType;  
+    outputROIFilterType::Pointer extractCarinaSliceFilter = outputROIFilterType::New();	                 
+   
+    InputImageType::SizeType sliceSize = trachea->GetLargestPossibleRegion().GetSize();
+    sliceSize[2] = 1;
+    InputImageType::IndexType sliceIndex;
+    sliceIndex.Fill(0);
+   
+    InputImageType::RegionType sliceRegion;                                                  
+    sliceRegion.SetSize(  sliceSize  );                                                                
+    sliceRegion.SetIndex( sliceIndex ); 
+
+    extractCarinaSliceFilter->SetInput( trachea );	      
+    extractCarinaSliceFilter->SetRegionOfInterest( sliceRegion );					 
+    extractCarinaSliceFilter->Update();
+
+    SliceIterator singleSliceIt (extractCarinaSliceFilter->GetOutput(), extractCarinaSliceFilter->GetOutput()->GetLargestPossibleRegion());
+
+    singleSliceIt.SetFirstDirection(0);
+    singleSliceIt.SetSecondDirection(1);
+
+    singleSliceIt.GoToBegin();
+
+    unsigned int yRightFiducialMaxPos = 0;
+    unsigned int yRightFiducialMinPos = trachea->GetLargestPossibleRegion().GetSize(1);
+    unsigned int yRightFiducialPos    = 0; 
+
+    unsigned int yLeftFiducialMaxPos  = 0;
+    unsigned int yLeftFiducialMinPos  = trachea->GetLargestPossibleRegion().GetSize(1);
+    unsigned int yLeftFiducialPos     = 0; 
+
+    while( !singleSliceIt.IsAtEndOfSlice() )
+    {
+        while( !singleSliceIt.IsAtEndOfLine() )
+        {
+            value = singleSliceIt.Get();
+            if( value == labelValue )
+            {
+                if( singleSliceIt.GetIndex()[0] > xCarinaPosition )
+                {
+                    if( singleSliceIt.GetIndex()[1] >= yFinalMin && singleSliceIt.GetIndex()[1] <= yFinalMax  )
+                    {
+                            if( singleSliceIt.GetIndex()[1] > yLeftFiducialMaxPos )
+                            {
+                                yLeftFiducialMaxPos = singleSliceIt.GetIndex()[1];                        
+                            }
+                            if( singleSliceIt.GetIndex()[1] < yLeftFiducialMinPos )
+                            {
+                                yLeftFiducialMinPos = singleSliceIt.GetIndex()[1];
+                            }
+                    }
+                }
+                else if( singleSliceIt.GetIndex()[0] <= xCarinaPosition ) 
+                {
+                    if( singleSliceIt.GetIndex()[1] >= yFinalMin && singleSliceIt.GetIndex()[1] <= yFinalMax  )
+                    {
+                        if( singleSliceIt.GetIndex()[1] > yRightFiducialMaxPos )
+                        {
+                            yRightFiducialMaxPos = singleSliceIt.GetIndex()[1];
+                        }
+                        if( singleSliceIt.GetIndex()[1] < yRightFiducialMinPos )
+                        {
+                            yRightFiducialMinPos = singleSliceIt.GetIndex()[1];
+                        }                                             
+                    }
+                }
+            }
+            ++singleSliceIt;
+        }
+        singleSliceIt.NextLine();
+    }
+
+    if( yRightFiducialMaxPos > yRightFiducialMinPos )
+    {
+        yRightFiducialPos = yRightFiducialMinPos + (yRightFiducialMaxPos - yRightFiducialMinPos) / 2;
+    }
+
+    if( yLeftFiducialMaxPos > yLeftFiducialMinPos )
+    {
+        yLeftFiducialPos = yLeftFiducialMinPos + (yLeftFiducialMaxPos - yLeftFiducialMinPos) / 2;
+    }
+
+    unsigned int xRightFiducialMaxPos = 0;
+    unsigned int xRightFiducialMinPos = trachea->GetLargestPossibleRegion().GetSize(1);
+    unsigned int xRightFiducialPos    = 0; 
+
+    unsigned int xLeftFiducialMaxPos  = 0;
+    unsigned int xLeftFiducialMinPos  = trachea->GetLargestPossibleRegion().GetSize(0);
+    unsigned int xLeftFiducialPos     = 0; 
+
+    singleSliceIt.GoToBegin();
+    while( !singleSliceIt.IsAtEndOfSlice() )
+    {
+        while( !singleSliceIt.IsAtEndOfLine() )
+        {
+            value = singleSliceIt.Get();
+            if( value == labelValue )
+            {
+                if( singleSliceIt.GetIndex()[1] == yRightFiducialPos )
+                {
+                    if( singleSliceIt.GetIndex()[0] <= xCarinaPosition)
+                    {    
+                        if( singleSliceIt.GetIndex()[0] > xRightFiducialMaxPos )
+                        {
+                            xRightFiducialMaxPos = singleSliceIt.GetIndex()[0];
+                        }
+                        if( singleSliceIt.GetIndex()[0] < xRightFiducialMinPos )
+                        {
+                            xRightFiducialMinPos = singleSliceIt.GetIndex()[0];
+                        }
+                    }
+                }
+                if( singleSliceIt.GetIndex()[1] == yLeftFiducialPos )
+                {
+                    if( singleSliceIt.GetIndex()[0] > xCarinaPosition )
+                    {
+                        if( singleSliceIt.GetIndex()[0] > xLeftFiducialMaxPos )
+                        {
+                            xLeftFiducialMaxPos = singleSliceIt.GetIndex()[0];
+                        }
+                        if( singleSliceIt.GetIndex()[0] < xLeftFiducialMinPos )
+                        {
+                            xLeftFiducialMinPos = singleSliceIt.GetIndex()[0];
+                        }
+                    }
+                }   
+            }
+            ++singleSliceIt;
+        }
+        singleSliceIt.NextLine();
+    }
+
+    if( xRightFiducialMaxPos > xRightFiducialMinPos )
+    {
+        xRightFiducialPos = xRightFiducialMinPos + (xRightFiducialMaxPos - xRightFiducialMinPos) / 2;
+    } 
+
+    if( xLeftFiducialMaxPos > xLeftFiducialMinPos )
+    {
+        xLeftFiducialPos = xLeftFiducialMinPos + (xLeftFiducialMaxPos - xLeftFiducialMinPos) / 2;
+    }
+
+    InputImageType::IndexType rightFiducial, leftFiducial;
+
+    rightFiducial[0] = tracheaCropStart[0] + xRightFiducialPos;
+    rightFiducial[1] = yRightFiducialPos;
+    rightFiducial[2] = tracheaCropStart[2]; //+ trachea->GetLargestPossibleRegion().GetSize(2) + carinaIdx;
+
+    leftFiducial[0] = tracheaCropStart[0] + xLeftFiducialPos;
+    leftFiducial[1] = yLeftFiducialPos;
+    leftFiducial[2] = rightFiducial[2];    
+
+    /** RIGHT AND LEFT AIRWAYS SEGMENTATION */
+    typedef itk::MaskNegatedImageFilter< InputImageType, OutputImageType, InputImageType > MaskNegatedImageType;
+    MaskNegatedImageType::Pointer maskNegFilter = MaskNegatedImageType::New();
+    
+    typedef itk::StatisticsImageFilter< OutputImageType > StatisticsImageFilterType;		
+    StatisticsImageFilterType::Pointer StatisticsFilter = StatisticsImageFilterType::New();	
+
+    StatisticsFilter->SetInput(trachea);
+    StatisticsFilter->Update();
+    unsigned int numberOfVoxels = ( StatisticsFilter->GetSum() / labelValue );
+
+    // Use half trachea to mask the input image
+    typedef itk::BinaryImageToShapeLabelMapFilter< OutputImageType > ShapeLabelType;
+		
+    typedef ShapeLabelType::OutputImageType LabelMapType;
+    LabelMapType::Pointer labelMap = LabelMapType::New();
+		
+    typedef itk::ImageDuplicator<OutputImageType> DuplicatorFilterType;
+
+    /** RIGHT AIRWAY SEGMENTATION */
+    OutputImageType::Pointer rightHalfTrachea = OutputImageType::New();
+            
+    DuplicatorFilterType::Pointer rightDuplicatorFilter = DuplicatorFilterType::New();
+    rightDuplicatorFilter->SetInputImage(trachea);
+    rightDuplicatorFilter->Update();
+    rightHalfTrachea = rightDuplicatorFilter->GetOutput();
+
+    SliceIterator rightSIt(rightHalfTrachea, rightHalfTrachea->GetRequestedRegion());
+
+    rightSIt.SetFirstDirection(0);
+    rightSIt.SetSecondDirection(1);
+
+    rightSIt.GoToBegin();
+
+    while( !rightSIt.IsAtEnd() )
+    {
+        unsigned int yMaxPos     = 0;
+        unsigned int yMinPos     = rightHalfTrachea->GetLargestPossibleRegion().GetSize(1); 
+    
+        unsigned int yMidPos     = 0; 
+
+        unsigned int yCurrentMax = 0;
+        unsigned int yCurrentMin = 0;
+
+        unsigned int prevLine    = 0;
+    
+        unsigned int prevDiff    = 0;
+
+        while( !rightSIt.IsAtEndOfSlice() )
+        {
+            while( !rightSIt.IsAtEndOfLine() )
+            {
+                value = rightSIt.Get();
+                if( value == labelValue )
+                {
+		    double d = rightSIt.GetIndex()[1] - prevLine;
+                    yDist = abs(d);
+                    if( prevLine != 0 && yDist <= 5 )
+                    {
+                        if( rightSIt.GetIndex()[1] > yMaxPos )
+                        {
+                            yMaxPos = rightSIt.GetIndex()[1];
+                        }
+                        if( rightSIt.GetIndex()[1] < yMinPos )
+                        {
+                            yMinPos = rightSIt.GetIndex()[1];
+                        }
+                        prevLine = rightSIt.GetIndex()[1];
+
+                        unsigned int diff = yMaxPos - yMinPos;
+                        if( diff > prevDiff)
+                        {
+                            yCurrentMax = yMaxPos;
+                            yCurrentMin = yMinPos;
+                        }
+                    }
+                    else if( prevLine != 0 && yDist >= 5 )
+                    {
+                        prevDiff = yCurrentMax - yCurrentMin;
+
+                        yMinPos = rightHalfTrachea->GetLargestPossibleRegion().GetSize(1); 
+                        yMaxPos = 0; 
+                        if( rightSIt.GetIndex()[1] > yMaxPos )
+                        {
+                            yMaxPos = rightSIt.GetIndex()[1];
+                        }
+                        if( rightSIt.GetIndex()[1] < yMinPos )
+                        {
+                            yMinPos = rightSIt.GetIndex()[1];
+                        }
+                    }
+                    prevLine = rightSIt.GetIndex()[1];
+                }
+                ++rightSIt;
+            }
+            rightSIt.NextLine();
+        }
+
+        if( yCurrentMax > yCurrentMin )
+        {
+            yMidPos = yCurrentMin + (yCurrentMax - yCurrentMin) / 2;
+        }
+    
+        unsigned int xMaxPos  = 0;    
+        unsigned int xMinPos  = rightHalfTrachea->GetLargestPossibleRegion().GetSize(0);
+        unsigned int xMidPos  = 0;
+    
+        rightSIt.GoToBeginOfSlice();
+        while( !rightSIt.IsAtEndOfSlice() )
+        {
+            while( !rightSIt.IsAtEndOfLine() )
+            {
+                value = rightSIt.Get();
+                if( rightSIt.GetIndex()[1] == yMidPos && value == labelValue )
+                {
+                    if( rightSIt.GetIndex()[0] > xMaxPos )
+                    {
+                        xMaxPos = rightSIt.GetIndex()[0];
+                    }
+                    if( rightSIt.GetIndex()[0] < xMinPos )
+                    {
+                        xMinPos = rightSIt.GetIndex()[0];
+                    }
+                }
+                ++rightSIt;
+            }
+            rightSIt.NextLine();
+        }
+        if( xMaxPos > xMinPos )
+        {
+            xMidPos = xMinPos + (xMaxPos - xMinPos) / 2;
+        }
+        rightSIt.GoToBeginOfSlice();
+        while( !rightSIt.IsAtEndOfSlice() )
+        {
+            while( !rightSIt.IsAtEndOfLine() )
+            {
+                value = rightSIt.Get();
+                if( value == labelValue )
+                {
+                    if( !flipIm && rightSIt.GetIndex()[0] <= xMidPos )
+                    {
+                        rightSIt.Set(0);
+                    }
+                    else if( flipIm && rightSIt.GetIndex()[0] >= xMidPos )
+                    {
+                        rightSIt.Set(0);            
+                    }
+                }
+                ++rightSIt;
+            }
+            rightSIt.NextLine();
+        }
+        rightSIt.NextSlice();
+    }
+
+    rightSIt.GoToBegin();
+    while( !rightSIt.IsAtEndOfSlice() )
+    {
+        while( !rightSIt.IsAtEndOfLine() )
+        {
+            value = rightSIt.Get();
+            if( value == labelValue )
+            {
+                rightSIt.Set(0);
+            }
+            ++rightSIt;
+        }
+        rightSIt.NextLine();
+    }
+
+    OutputImageType::IndexType idx;
+    idx = regionIndex;
+
+    pasteImage->FillBuffer(0);
+    pasteImage = Paste<OutputImageType>( rightHalfTrachea, idx, pasteImage );
+
+    OutputImageType::Pointer closeImage = OutputImageType::New(); 
+
+    closeImage->SetRegions(reader->GetOutput()->GetRequestedRegion() );                                   
+    closeImage->SetBufferedRegion( reader->GetOutput()->GetBufferedRegion() );
+    closeImage->SetLargestPossibleRegion( reader->GetOutput()->GetLargestPossibleRegion() );
+    closeImage->CopyInformation( reader->GetOutput() );
+    closeImage->Allocate();
+    closeImage->FillBuffer(labelValue);
+
+    OutputImageType::SizeType sz = reader->GetOutput()->GetLargestPossibleRegion().GetSize();
+
+    if( !flipIm )
+    {
+        sz[0] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(0) - (tracheaCropStart[0] + xCarinaPosition ) + 2;
     }
     else
     {
-        pasteImage->FillBuffer(0);
-        pasteImage = Paste<OutputImageType>( trachea, regionIndex, pasteImage ); 
+        sz[0] = tracheaCropStart[0] + xCarinaPosition + 2;
     }
+
+    sz[2] = 6;
+    OutputImageType::IndexType stIdx; 
+    stIdx.Fill(0);   
+                       
+    OutputImageType::RegionType rg;                                                  
+    rg.SetSize(  sz  );
+    rg.SetIndex( stIdx );
+
+    typedef itk::RegionOfInterestImageFilter< OutputImageType, OutputImageType > outputROIFilterType;
+    outputROIFilterType::Pointer cropCloseImageFilter = outputROIFilterType::New();	                 
+
+    cropCloseImageFilter->SetInput( closeImage );	      
+    cropCloseImageFilter->SetRegionOfInterest( rg );					 
+    cropCloseImageFilter->Update();
+
+    if(!flipIm)
+    {
+        stIdx[0] = tracheaCropStart[0] + xCarinaPosition - 2;
+        stIdx[2] = rightFiducial[2] - 3;
+    }
+    else
+    {
+        stIdx[0] = 0;
+        stIdx[2] = leftFiducial[2] - 3;
+    }	
+
+    pasteImage = Paste<OutputImageType>( cropCloseImageFilter->GetOutput(), stIdx, pasteImage );
+
+    // The half trachea label is used to mask the input image
+    maskNegFilter->SetInput( reader->GetOutput() );
+    maskNegFilter->SetMaskImage( pasteImage );
+    maskNegFilter->Update();	
+
+    OutputImageType::Pointer rightLung = OutputImageType::New();
+    std::string reconstructionKernel = reconstructionKernelType.c_str();
+    
+    if( flipIm )
+    {
+        rightLung = RightLeftSegmentation( maskNegFilter->GetOutput(), leftFiducial, reconstructionKernel, numberOfVoxels, labelValue ); 
+    }
+    else
+    {
+        rightLung = RightLeftSegmentation( maskNegFilter->GetOutput(), rightFiducial, reconstructionKernel, numberOfVoxels, labelValue ); 
+    }
+				
+    ShapeLabelType::Pointer rightLabelConverter = ShapeLabelType::New();
+        
+    rightLabelConverter->SetInput( rightLung );
+    rightLabelConverter->SetInputForegroundValue( labelValue );
+    rightLabelConverter->Update();
+		
+    labelMap = rightLabelConverter->GetOutput();        
+
+    /** LEFT AIRWAY SEGMENTATION */
+    OutputImageType::Pointer leftHalfTrachea = OutputImageType::New();
+
+    DuplicatorFilterType::Pointer leftDuplicatorFilter = DuplicatorFilterType::New();
+    leftDuplicatorFilter->SetInputImage(trachea);
+    leftDuplicatorFilter->Update();
+    leftHalfTrachea = leftDuplicatorFilter->GetOutput();
+
+    SliceIterator leftSIt(leftHalfTrachea, leftHalfTrachea->GetRequestedRegion());
+
+    leftSIt.SetFirstDirection(0);
+    leftSIt.SetSecondDirection(1);
+
+    leftSIt.GoToBegin();
+
+    while( !leftSIt.IsAtEndOfSlice() )
+    {
+        while( !leftSIt.IsAtEndOfLine() )
+        {
+            value = leftSIt.Get();
+            if( value == labelValue )
+            {
+                leftSIt.Set(0);
+            }
+            ++leftSIt;
+        }
+        leftSIt.NextLine();
+    }
+
+    leftSIt.GoToBegin();
+    while( !leftSIt.IsAtEnd() )
+    {
+        unsigned int yMaxPos     = 0;
+        unsigned int yMinPos     = leftHalfTrachea->GetLargestPossibleRegion().GetSize(1); 
+    
+        unsigned int yMidPos     = 0; 
+
+        unsigned int yCurrentMax = 0;
+        unsigned int yCurrentMin = 0;
+
+        unsigned int prevLine    = 0;
+    
+        unsigned int prevDiff    = 0;
+
+        while( !leftSIt.IsAtEndOfSlice() )
+        {
+            while( !leftSIt.IsAtEndOfLine() )
+            {
+                value = leftSIt.Get();
+                if( value == labelValue )
+                {
+		    double d = leftSIt.GetIndex()[1] - prevLine;
+                    yDist = abs(d);
+                    if( prevLine != 0 && yDist <= 5 )
+                    {
+                        if( leftSIt.GetIndex()[1] > yMaxPos )
+                        {
+                            yMaxPos = leftSIt.GetIndex()[1];
+                        }
+                        if( leftSIt.GetIndex()[1] < yMinPos )
+                        {
+                            yMinPos = leftSIt.GetIndex()[1];
+                        }
+                        prevLine = leftSIt.GetIndex()[1];
+
+                        unsigned int diff = yMaxPos - yMinPos;
+                        if( diff > prevDiff)
+                        {
+                            yCurrentMax = yMaxPos;
+                            yCurrentMin = yMinPos;
+                        }
+                    }
+                    else if( prevLine != 0 && yDist >= 5 )
+                    {
+                        prevDiff = yCurrentMax - yCurrentMin;
+
+                        yMinPos = leftHalfTrachea->GetLargestPossibleRegion().GetSize(1); 
+                        yMaxPos = 0; 
+                        if( leftSIt.GetIndex()[1] > yMaxPos )
+                        {
+                            yMaxPos = leftSIt.GetIndex()[1];
+                        }
+                        if( leftSIt.GetIndex()[1] < yMinPos )
+                        {
+                            yMinPos = leftSIt.GetIndex()[1];
+                        }
+                    }
+                    prevLine = leftSIt.GetIndex()[1];
+                }
+                ++leftSIt;
+            }
+            leftSIt.NextLine();
+        }
+
+        if( yCurrentMax > yCurrentMin )
+        {
+            yMidPos = yCurrentMin + (yCurrentMax - yCurrentMin) / 2;
+        }
+    
+        unsigned int xMaxPos  = 0;    
+        unsigned int xMinPos  = leftHalfTrachea->GetLargestPossibleRegion().GetSize(0);
+        unsigned int xMidPos  = 0;
+    
+        leftSIt.GoToBeginOfSlice();
+        while( !leftSIt.IsAtEndOfSlice() )
+        {
+            while( !leftSIt.IsAtEndOfLine() )
+            {
+                value = leftSIt.Get();
+                if( leftSIt.GetIndex()[1] == yMidPos && value == labelValue )
+                {
+                    if( leftSIt.GetIndex()[0] > xMaxPos )
+                    {
+                        xMaxPos = leftSIt.GetIndex()[0];
+                    }
+                    if( leftSIt.GetIndex()[0] < xMinPos )
+                    {
+                        xMinPos = leftSIt.GetIndex()[0];
+                    }
+                }
+                ++leftSIt;
+            }
+            leftSIt.NextLine();
+        }
+        if( xMaxPos > xMinPos )
+        {
+            xMidPos = xMinPos + (xMaxPos - xMinPos) / 2;
+        }
+        
+        leftSIt.GoToBeginOfSlice();
+        while( !leftSIt.IsAtEndOfSlice() )
+        {
+            while( !leftSIt.IsAtEndOfLine() )
+            {
+                value = leftSIt.Get();
+                if( value == labelValue )
+                {
+                    if( !flipIm && leftSIt.GetIndex()[0] >= xMidPos )
+                    {
+                        leftSIt.Set(0);
+                    }
+                    else if( flipIm && leftSIt.GetIndex()[0] <= xMidPos )
+                    {
+                        leftSIt.Set(0);            
+                    }
+                }
+                ++leftSIt;
+            }
+            leftSIt.NextLine();
+        }
+        leftSIt.NextSlice();
+    }
+
+    pasteImage->FillBuffer(0);
+    pasteImage = Paste<OutputImageType>( leftHalfTrachea, idx, pasteImage );
+
+    if( !flipIm )
+    {
+        sz[0] = tracheaCropStart[0] + xCarinaPosition + 2;
+    }
+    else
+    {
+        sz[0] = reader->GetOutput()->GetLargestPossibleRegion().GetSize(0) - (tracheaCropStart[0] + xCarinaPosition ) + 2;
+    }
+    
+    stIdx.Fill(0);
+
+    rg.SetSize(  sz  );
+    rg.SetIndex( stIdx );
+
+    cropCloseImageFilter->SetInput( closeImage );	      
+    cropCloseImageFilter->SetRegionOfInterest( rg );					 
+    cropCloseImageFilter->Update();
+
+    if(!flipIm)
+    {
+        stIdx[0] = 0;
+        stIdx[2] = leftFiducial[2] - 3;
+    }
+    else
+    {
+        stIdx[0] = tracheaCropStart[0] + xCarinaPosition - 2;
+        stIdx[2] = rightFiducial[2] - 3;
+    }			
+    pasteImage = Paste<OutputImageType>( cropCloseImageFilter->GetOutput(), stIdx, pasteImage );
+
+    maskNegFilter->SetInput( reader->GetOutput() );
+    maskNegFilter->SetMaskImage( pasteImage );
+    maskNegFilter->Update();
+
+    OutputImageType::Pointer leftLung = OutputImageType::New();
+	
+    if( flipIm )
+    {
+        leftLung = RightLeftSegmentation( maskNegFilter->GetOutput(), rightFiducial, reconstructionKernel, numberOfVoxels, labelValue );
+    }
+    else
+    {
+        leftLung = RightLeftSegmentation( maskNegFilter->GetOutput(), leftFiducial, reconstructionKernel, numberOfVoxels, labelValue );
+    }
+				
+    ShapeLabelType::Pointer leftLabelConverter = ShapeLabelType::New();
+
+    leftLabelConverter->SetInput( leftLung );
+    leftLabelConverter->SetInputForegroundValue( labelValue );
+    leftLabelConverter->Update();  
+
+    typedef itk::MergeLabelMapFilter< LabelMapType > MergeFilterType;	  
+    MergeFilterType::Pointer mergeFilter = MergeFilterType::New(); 	  
+    mergeFilter->SetMethod( MergeFilterType::PACK );
+    mergeFilter->SetInput( labelMap );
+    mergeFilter->SetInput( 1, leftLabelConverter->GetOutput() );
+    mergeFilter->Update();
+    labelMap = mergeFilter->GetOutput();
+
+    pasteImage->FillBuffer(0);
+    pasteImage = Paste<OutputImageType>( trachea, regionIndex, pasteImage );
+
+    ShapeLabelType::Pointer labelConverter = ShapeLabelType::New();
+
+    labelConverter->SetInput( pasteImage );
+    labelConverter->SetInputForegroundValue( labelValue ); 
+    labelConverter->Update();
+	  
+    for( unsigned int i = 0; i < labelConverter->GetOutput()->GetNumberOfLabelObjects(); i++ )
+    {
+        labelMap->PushLabelObject( labelConverter->GetOutput()->GetNthLabelObject(i) );
+    }
+  
+    labelMap->Update();
+  
+    typedef itk::LabelMapToBinaryImageFilter< LabelMapType, OutputImageType > LabelMapToBinaryImageType; 
+    LabelMapToBinaryImageType::Pointer labelToBinaryFilter = LabelMapToBinaryImageType::New();
+
+    labelToBinaryFilter->SetInput( labelMap );
+    labelToBinaryFilter->SetBackgroundValue( 0 );
+    labelToBinaryFilter->SetForegroundValue( labelValue );
+    labelToBinaryFilter->Update();
+ 
+    pasteImage = labelToBinaryFilter->GetOutput();
+
+    ////////////////////////////////////////////////////////
+    /*regionIndex.Fill(0);
+    pasteImage->FillBuffer(0);
+    pasteImage = Paste<OutputImageType>( leftLung,regionIndex, pasteImage );*/
+    ////////////////////////////////////////////////////////
        
     if( flipIm )
     {
@@ -1342,35 +2021,31 @@ int main( int argc, char *argv[] )
     }
 
     /** CLOSING AND HOLE FILLING TO IMPROVE THE SEGMENTATION RESULT */
-    typedef itk::BinaryBallStructuringElement< OutputImageType::PixelType, DIM > StructuringElementType;
+    //typedef itk::BinaryBallStructuringElement< OutputImageType::PixelType, DIM > StructuringElementType;
   	
-    StructuringElementType structElement;
-    StructuringElementType::SizeType radius;
-    radius.Fill( 1 );
+    StructuringElementType newStructElement;
+    StructuringElementType::SizeType newRadius;
+    newRadius.Fill( 1 );
 
-    structElement.SetRadius( radius );
-    structElement.CreateStructuringElement();
+    newStructElement.SetRadius( newRadius );
+    newStructElement.CreateStructuringElement();
 	
-    typedef itk::BinaryMorphologicalClosingImageFilter < OutputImageType, OutputImageType, StructuringElementType > CloseType;
-    CloseType::Pointer closing = CloseType::New();
+    //typedef itk::BinaryMorphologicalClosingImageFilter < OutputImageType, OutputImageType, StructuringElementType > CloseType;
+    CloseType::Pointer newClosing = CloseType::New();
 
-    itk::PluginFilterWatcher watcher1(closing, "Closing Operation", CLPProcessInformation);
-
-    closing->SetInput( pasteImage );
-    closing->SetKernel( structElement );
-    closing->SetForegroundValue( labelValue );
-    closing->Update();
+    newClosing->SetInput( pasteImage );
+    newClosing->SetKernel( newStructElement );
+    newClosing->SetForegroundValue( labelValue );
+    newClosing->Update();
 	
     typedef itk::VotingBinaryIterativeHoleFillingImageFilter< OutputImageType > IterativeFillHolesFilterType;
     IterativeFillHolesFilterType::Pointer HoleFilling= IterativeFillHolesFilterType::New();
-
-    itk::PluginFilterWatcher watcher2(HoleFilling, "Holes Filling Operation", CLPProcessInformation);
 
     OutputImageType::SizeType FillRadius;
 
     FillRadius.Fill(1);
 
-    HoleFilling->SetInput( closing->GetOutput() );
+    HoleFilling->SetInput( newClosing->GetOutput() );
     HoleFilling->SetRadius( FillRadius );
     HoleFilling->SetBackgroundValue( 0 );
     HoleFilling->SetForegroundValue( labelValue );
@@ -1383,7 +2058,7 @@ int main( int argc, char *argv[] )
     WriterType::Pointer labelImage = WriterType::New();
 
     labelImage->SetFileName( label.c_str() );
-    labelImage->SetInput(  HoleFilling->GetOutput() );
+    labelImage->SetInput( HoleFilling->GetOutput() );
     labelImage->SetUseCompression(1);
 
     try

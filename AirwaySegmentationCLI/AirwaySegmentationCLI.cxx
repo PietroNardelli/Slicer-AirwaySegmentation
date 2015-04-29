@@ -34,6 +34,8 @@
 #include "itkImageSliceIteratorWithIndex.h"
 #include "itkImageDuplicator.h"
 
+#include "itkGrayscaleFillholeImageFilter.h"
+
 #include <vector>
 
 #include "AirwaySegmentationCLICLP.h"
@@ -684,7 +686,7 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
             {
                 th = 0.6;
             }
-            else if( trachea_voxels <= 80000 )
+            else if( trachea_voxels <= 50000 )
             {
                 th = 0.8;
             }
@@ -2039,7 +2041,7 @@ int main( int argc, char *argv[] )
     newClosing->Update();
 	
     typedef itk::VotingBinaryIterativeHoleFillingImageFilter< OutputImageType > IterativeFillHolesFilterType;
-    IterativeFillHolesFilterType::Pointer HoleFilling= IterativeFillHolesFilterType::New();
+    IterativeFillHolesFilterType::Pointer HoleFilling = IterativeFillHolesFilterType::New();
 
     OutputImageType::SizeType FillRadius;
 
@@ -2053,12 +2055,19 @@ int main( int argc, char *argv[] )
     HoleFilling->SetMaximumNumberOfIterations( 10 );
     HoleFilling->Update();
 
+    typedef itk::GrayscaleFillholeImageFilter< OutputImageType, OutputImageType > GSFillHolesFilterType;
+    GSFillHolesFilterType::Pointer GSHoleFilling = GSFillHolesFilterType::New();
+
+    GSHoleFilling->SetInput( HoleFilling->GetOutput() );
+    GSHoleFilling->SetFullyConnected(1);
+    GSHoleFilling->Update();
+
     /** LABEL CREATION */
     typedef  itk::ImageFileWriter<OutputImageType> WriterType;
     WriterType::Pointer labelImage = WriterType::New();
 
     labelImage->SetFileName( label.c_str() );
-    labelImage->SetInput( HoleFilling->GetOutput() );
+    labelImage->SetInput( GSHoleFilling->GetOutput() );
     labelImage->SetUseCompression(1);
 
     try

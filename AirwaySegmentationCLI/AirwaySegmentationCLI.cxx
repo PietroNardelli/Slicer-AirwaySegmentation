@@ -2027,7 +2027,7 @@ int main( int argc, char *argv[] )
   	
     StructuringElementType newStructElement;
     StructuringElementType::SizeType newRadius;
-    newRadius.Fill( 1 );
+    newRadius.Fill( 5 );
 
     newStructElement.SetRadius( newRadius );
     newStructElement.CreateStructuringElement();
@@ -2038,6 +2038,7 @@ int main( int argc, char *argv[] )
     newClosing->SetInput( pasteImage );
     newClosing->SetKernel( newStructElement );
     newClosing->SetForegroundValue( labelValue );
+    newClosing->SetSafeBorder( 1 );
     newClosing->Update();
 	
     typedef itk::VotingBinaryIterativeHoleFillingImageFilter< OutputImageType > IterativeFillHolesFilterType;

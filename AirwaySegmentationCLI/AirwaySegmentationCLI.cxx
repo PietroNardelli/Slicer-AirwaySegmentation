@@ -145,7 +145,7 @@ OutputImageType::Pointer TracheaSegmentation( InputImageType::Pointer VOI,
     typedef itk::RegionOfInterestImageFilter< OutputImageType, OutputImageType > ROIFilterType;
     ROIFilterType::Pointer axialTracheaFilter = ROIFilterType::New();
 
-    typedef itk::BinaryImageToShapeLabelMapFilter< OutputImageType > ShapeLabelType;	
+    typedef itk::BinaryImageToShapeLabelMapFilter< OutputImageType > ShapeLabelType;
     ShapeLabelType::Pointer axialLabelSizeFilter = ShapeLabelType::New();
 
     axialLabelSizeFilter->SetInputForegroundValue( labelColor );

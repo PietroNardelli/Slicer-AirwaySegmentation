@@ -159,9 +159,9 @@ class AirwaySegmentationWidget:
     self.applyButton.enabled = False
     #self.bronchoscopyButton.enabled = False
             
-    nodeType = 'vtkMRMLScalarVolumeNode'
+    nodeType = 'vtkMRMLLabelMapVolumeNode'
     self.labelNode = slicer.mrmlScene.CreateNodeByClass(nodeType)
-    self.labelNode.SetLabelMap(1)
+#    self.labelNode.SetLabelMap(1)
     self.labelNode.SetScene(slicer.mrmlScene)
     self.labelNode.SetName(slicer.mrmlScene.GetUniqueNameByString('AirwayLabel'))
     slicer.mrmlScene.AddNode(self.labelNode)

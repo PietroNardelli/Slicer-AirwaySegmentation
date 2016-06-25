@@ -168,17 +168,11 @@ class AirwaySegmentationWidget:
 
     logic = AirwaySegmentationLogic()
     labelColor = int(self.labelColorSliderWidget.value)
-      
-    try:
-      logic.run(self.inputSelector.currentNode(), self.labelNode, self.fiducialsList.currentNode(),labelColor)
-      logic.createModel(self.labelNode)
-      self.applyButton.enabled = True
-      #self.bronchoscopyButton.enabled = True
-    except Exception, e:
-      import traceback
-      traceback.print_exc()
-      qt.QMessageBox.warning(slicer.util.mainWindow(), 
-          "Running", 'Exception!\n\n' + str(e) + "\n\nSee Python Console for Stack Trace")
+    
+    if logic.run(self.inputSelector.currentNode(), self.labelNode, self.fiducialsList.currentNode(),labelColor):
+        logic.createModel(self.labelNode)
+
+    self.applyButton.enabled = True
 
   def onBronchoscopyButton(self):
     self.bronchoscopyButton.enabled = True
@@ -231,23 +225,28 @@ class AirwaySegmentationLogic:
     """
     self.labelValue = labelValue
 
-    volumeName = inputVolume.GetName()
-    n = slicer.util.getNode(volumeName)
-    instUIDs = n.GetAttribute('DICOM.instanceUIDs').split()
-    fileName = slicer.dicomDatabase.fileForInstance(instUIDs[0])
-    convolutionKernel = slicer.dicomDatabase.fileValue(fileName,'0018,1210')
-    
-    airwaySegmentationModule = slicer.modules.airwaysegmentationcli
-    parameters = {
+    try:
+      volumeName = inputVolume.GetName()
+      n = slicer.util.getNode(volumeName)
+      instUIDs = n.GetAttribute('DICOM.instanceUIDs').split()
+      fileName = slicer.dicomDatabase.fileForInstance(instUIDs[0])
+      convolutionKernel = slicer.dicomDatabase.fileValue(fileName,'0018,1210')
+      airwaySegmentationModule = slicer.modules.airwaysegmentationcli
+      parameters = {
           "inputVolume": inputVolume.GetID(),
           "reconstructionKernelType": convolutionKernel,
           "label": outputVolume.GetID(),
           "seed": fiducialsList.GetID(),
           "labelValue": labelValue,
           }
-    self.delayDisplay('Running the algorithm')
-    slicer.cli.run( airwaySegmentationModule,None,parameters,wait_for_completion = True )
-   
+      self.delayDisplay('Running the algorithm')
+      slicer.cli.run( airwaySegmentationModule,None,parameters,wait_for_completion = True )
+    except Exception:
+        import traceback
+        traceback.print_exc()
+        qt.QMessageBox.warning(slicer.util.mainWindow(), 
+                               "Running", 'Exception!\n\n' + "Please use a DICOM image as input. For other image types, please use the Airway Segmentation CLI module.")
+        return False
     return True
     
   def createModel(self,labelVolume):

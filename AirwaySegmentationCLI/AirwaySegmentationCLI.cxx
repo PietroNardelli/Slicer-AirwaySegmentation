@@ -546,7 +546,7 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
             {
                 th = 0.5;
             }
-            else if( trachea_voxels > 20000 && trachea_voxels <= 50000 )//( trachea_voxels > 40000 && trachea_voxels <= 100000 )
+            else if( trachea_voxels > 20000 && trachea_voxels <= 50000 ) //( trachea_voxels > 40000 && trachea_voxels <= 100000 )
             {
                 th = 0.75;
             }
@@ -653,7 +653,7 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
     }
     else if( reconKernel == "B70f" || reconKernel == "B70s" )
     {
-        if(VOI->GetLargestPossibleRegion().GetSize(2) < 300 )
+        if(VOI->GetLargestPossibleRegion().GetSize(2) <= 300 )
         {
             if( trachea_voxels > 90000)
             {
@@ -692,6 +692,47 @@ OutputImageType::Pointer RightLeftSegmentation( InputImageType::Pointer VOI,
             }
         }
     }
+	else
+	{
+		if (VOI->GetLargestPossibleRegion().GetSize(2) < 300)
+		{
+			if (trachea_voxels > 90000)
+			{
+				th = 0.35;
+			}
+			else if (trachea_voxels > 60000 && trachea_voxels <= 90000)
+			{
+				th = 0.5;
+			}
+			else if (trachea_voxels > 30000 && trachea_voxels <= 60000)
+			{
+				th = 0.6;
+			}
+			else if (trachea_voxels <= 30000)
+			{
+				th = 0.8;
+			}
+		}
+		if (VOI->GetLargestPossibleRegion().GetSize(2) > 300)
+		{
+			if (trachea_voxels > 120000)
+			{
+				th = 0.25;
+			}
+			else if (trachea_voxels > 80000 && trachea_voxels <= 120000)
+			{
+				th = 0.4;
+			}
+			else if (trachea_voxels > 50000 && trachea_voxels <= 80000)
+			{
+				th = 0.6;
+			}
+			else if (trachea_voxels <= 50000)
+			{
+				th = 0.8;
+			}
+		}
+	}
 
     double g_max         = 1.6; // 0.15 according to Gao's idea
     double g             = 0;

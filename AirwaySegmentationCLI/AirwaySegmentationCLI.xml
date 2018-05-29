@@ -26,7 +26,7 @@
       <name>seed</name>
       <label>Seeds</label>
       <longflag>--seed</longflag>
-      <description><![CDATA[Three seed points (trachea, right and left main bronchi) has to be specified for the region growing algorithm]]></description>
+      <description><![CDATA[A single seed point in trachea has to be specified for the region growing algorithm]]></description>
       <default>0,0,0</default>
     </point>
   </parameters>

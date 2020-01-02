@@ -226,21 +226,38 @@ class AirwaySegmentationLogic:
     self.labelValue = labelValue
 
     try:
-      volumeName = inputVolume.GetName()
-      n = slicer.util.getNode(volumeName)
-      instUIDs = n.GetAttribute('DICOM.instanceUIDs').split()
-      fileName = slicer.dicomDatabase.fileForInstance(instUIDs[0])
-      convolutionKernel = slicer.dicomDatabase.fileValue(fileName,'0018,1210')
-      airwaySegmentationModule = slicer.modules.airwaysegmentationcli
-      parameters = {
-          "inputVolume": inputVolume.GetID(),
-          "reconstructionKernelType": convolutionKernel,
-          "label": outputVolume.GetID(),
-          "seed": fiducialsList.GetID(),
-          "labelValue": labelValue,
-          }
-      self.delayDisplay('Running the algorithm')
-      slicer.cli.run( airwaySegmentationModule,None,parameters,wait_for_completion = True )
+      try:
+        volumeName = inputVolume.GetName()
+        n = slicer.util.getNode(volumeName)
+        instUIDs = n.GetAttribute('DICOM.instanceUIDs').split()
+        fileName = slicer.dicomDatabase.fileForInstance(instUIDs[0])
+        convolutionKernel = slicer.dicomDatabase.fileValue(fileName, '0018,1210')
+        airwaySegmentationModule = slicer.modules.airwaysegmentationcli
+        parameters = {
+            "inputVolume": inputVolume.GetID(),
+            "reconstructionKernelType": convolutionKernel,
+            "label": outputVolume.GetID(),
+            "seed": fiducialsList.GetID(),
+            "labelValue": labelValue,
+            }
+          self.delayDisplay('Running the algorithm')
+          slicer.cli.run(airwaySegmentationModule, None, parameters, wait_for_completion=True)
+        except:
+          # volumeName = inputVolume.GetName()
+          # n = slicer.util.getNode(volumeName)
+          # instUIDs = n.GetAttribute('DICOM.instanceUIDs').split()
+          # fileName = slicer.dicomDatabase.fileForInstance(instUIDs[0])
+          # convolutionKernel = slicer.dicomDatabase.fileValue(fileName, '0018,1210')
+          airwaySegmentationModule = slicer.modules.airwaysegmentationcli
+          parameters = {
+              "inputVolume": inputVolume.GetID(),
+              "reconstructionKernelType": "STANDARD",
+              "label": outputVolume.GetID(),
+              "seed": fiducialsList.GetID(),
+              "labelValue": labelValue,
+              }
+          self.delayDisplay('Running the algorithm')
+          slicer.cli.run(airwaySegmentationModule, None, parameters, wait_for_completion=True)        
     except Exception:
         import traceback
         traceback.print_exc()

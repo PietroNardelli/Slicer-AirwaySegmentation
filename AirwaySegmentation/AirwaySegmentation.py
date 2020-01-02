@@ -234,12 +234,12 @@ class AirwaySegmentationLogic:
         convolutionKernel = slicer.dicomDatabase.fileValue(fileName, '0018,1210')
         airwaySegmentationModule = slicer.modules.airwaysegmentationcli
         parameters = {
-          "inputVolume": inputVolume.GetID(),
-          "reconstructionKernelType": convolutionKernel,
-          "label": outputVolume.GetID(),
-          "seed": fiducialsList.GetID(),
-          "labelValue": labelValue,
-          }
+            "inputVolume": inputVolume.GetID(),
+            "reconstructionKernelType": convolutionKernel,
+            "label": outputVolume.GetID(),
+            "seed": fiducialsList.GetID(),
+            "labelValue": labelValue,
+            }
           self.delayDisplay('Running the algorithm')
           slicer.cli.run(airwaySegmentationModule, None, parameters, wait_for_completion=True)
         except:
@@ -250,12 +250,12 @@ class AirwaySegmentationLogic:
           # convolutionKernel = slicer.dicomDatabase.fileValue(fileName, '0018,1210')
           airwaySegmentationModule = slicer.modules.airwaysegmentationcli
           parameters = {
-            "inputVolume": inputVolume.GetID(),
-            "reconstructionKernelType": "STANDARD",
-            "label": outputVolume.GetID(),
-            "seed": fiducialsList.GetID(),
-            "labelValue": labelValue,
-            }
+              "inputVolume": inputVolume.GetID(),
+              "reconstructionKernelType": "STANDARD",
+              "label": outputVolume.GetID(),
+              "seed": fiducialsList.GetID(),
+              "labelValue": labelValue,
+              }
           self.delayDisplay('Running the algorithm')
           slicer.cli.run(airwaySegmentationModule, None, parameters, wait_for_completion=True)        
     except Exception:
